@@ -1,28 +1,50 @@
-import { createServer as httpServer, type Server } from 'node:http';
+import { createServer as httpServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import crypto from 'node:crypto';
-import { createTunnelPlan } from '../core/plan.js';
-import { createLaravelPlan } from '../adapters/laravel.js';
-import { executeTunnelPlan } from '../core/execution.js';
-import type { TunnelConfig } from '../core/types.js';
+import { dashboardPage } from './page.js';
 
-export function createServer(): Server {
-  const token = crypto.randomUUID();
+const emptyService = {
+  listProjects: async () => [], getProject: async () => ({}), doctor: async () => ({ ok: true, checks: [] }),
+  prepareQuick: async (input: any) => ({ id: 'preview', effects: [`Start Quick Tunnel to ${input.localUrl}.`], confirmations: ['start-connector'] }),
+  prepareNamed: async (input: any) => ({ id: 'preview', effects: [`Create ${input.hostname}.`], confirmations: ['cloudflare-resources', 'start-connector'] }),
+  execute: async () => ({ state: 'skipped', message: 'No service configured.' }), start: async () => ({}), stop: async () => ({}), retry: async () => ({}), restart: async () => ({}),
+};
+
+export function createServer(options: { service?: any; sessionToken?: string; maxBodyBytes?: number } = {}): Server {
+  const service = options.service ?? emptyService; const token = options.sessionToken ?? crypto.randomUUID(); const maxBodyBytes = options.maxBodyBytes ?? 64 * 1024;
   return httpServer(async (req, res) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    if (req.method === 'GET' && req.url === '/') { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(html); return; }
-    if (req.method === 'GET' && req.url === '/api/session') return json(res, { confirmationToken: token });
-    if (req.method === 'POST' && ['/api/plan', '/api/validate', '/api/execute'].includes(req.url ?? '')) {
-      if (req.url === '/api/execute' && req.headers['x-confirmation-token'] !== token) return json(res, { ok: false, issues: [{ code: 'UI_CONFIRMATION_TOKEN_INVALID', reason: 'The UI confirmation token is missing or invalid.', fix: 'Reload the local UI and confirm from the same browser session.' }] }, 403);
-      try {
-        const body = JSON.parse(await readBody(req)); const config = body.config as TunnelConfig;
-        const plan = config.profile === 'laravel' ? createLaravelPlan(config) : createTunnelPlan(config);
-        if (req.url === '/api/execute') return json(res, await executeTunnelPlan(plan, { confirmed: body.confirmed ?? [], dryRun: body.dryRun ?? false }));
-        return json(res, { valid: plan.valid, issues: plan.issues, plan });
-      } catch { return json(res, { ok: false, issues: [{ code: 'UI_INVALID_JSON', reason: 'Request body is not valid JSON.', fix: 'Submit the wizard form again.' }] }, 400); }
+    secureHeaders(res);
+    const url = new URL(req.url ?? '/', 'http://127.0.0.1');
+    if (req.method === 'GET' && url.pathname === '/') return html(res, dashboardPage());
+    if (req.method === 'GET' && url.pathname === '/api/session') return json(res, { confirmationToken: token });
+    if (req.method === 'GET' && url.pathname === '/api/projects') return handle(res, async () => ({ projects: await service.listProjects() }));
+    if (req.method === 'GET' && url.pathname === '/api/doctor') return handle(res, () => service.doctor());
+    const detail = url.pathname.match(/^\/api\/projects\/([^/]+)$/);
+    if (req.method === 'GET' && detail) return handle(res, () => service.getProject(detail[1]));
+    if (req.method === 'POST') {
+      if (!validMutationRequest(req, token)) return json(res, { error: 'The local UI session is missing or invalid. Reload the page and try again.' }, 403);
+      if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return json(res, { error: 'Requests must use application/json.' }, 415);
+      let body: any; try { body = JSON.parse(await readBody(req, maxBodyBytes)); } catch (error) { return json(res, { error: error instanceof Error ? error.message : 'Invalid JSON request.' }, (error as any)?.code === 'BODY_TOO_LARGE' ? 413 : 400); }
+      if (url.pathname === '/api/plans/quick') return handle(res, () => service.prepareQuick(body));
+      if (url.pathname === '/api/plans/named') return handle(res, () => service.prepareNamed(body));
+      if (url.pathname === '/api/execute') return handle(res, () => service.execute(body.planId, body.confirmations ?? []));
+      const action = url.pathname.match(/^\/api\/projects\/([^/]+)\/(start|stop|retry|restart)$/);
+      if (action) return handle(res, () => service[action[2]](action[1]));
+      if (url.pathname === '/api/plan') {
+        const config = body.config ?? {}; return handle(res, async () => ({ plan: config.operation === 'quick' ? await service.prepareQuick({ projectPath: config.projectRoot ?? process.cwd(), ...config }) : await service.prepareNamed({ projectPath: config.projectRoot ?? process.cwd(), ...config }) }));
+      }
     }
-    res.statusCode = 404; res.end('Not found');
+    return json(res, { error: 'Not found.' }, 404);
   });
 }
-function readBody(req: any): Promise<string> { return new Promise(resolve => { let data = ''; req.on('data', (chunk: any) => data += chunk); req.on('end', () => resolve(data)); }); }
-function json(res: any, value: unknown, status = 200) { res.statusCode = status; res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(value)); }
-const html = `<!doctype html><html lang="en"><meta name="viewport" content="width=device-width"><title>Cloudflare Tunnel Kit</title><style>body{font:16px system-ui;max-width:720px;margin:40px auto;padding:0 20px;background:#f6f7fb;color:#18202a}main{background:white;padding:28px;border-radius:16px;box-shadow:0 8px 30px #0001}label{display:block;margin:14px 0 6px}input,select,button{font:inherit;padding:10px;border:1px solid #ccd3df;border-radius:8px;width:100%;box-sizing:border-box}button{margin-top:20px;background:#2457d6;color:white;cursor:pointer}pre{white-space:pre-wrap;background:#f1f3f7;padding:12px;border-radius:8px}.ok{color:#087443}.error{color:#a21b1b}</style><main><h1>Cloudflare Tunnel Kit</h1><p>Validate first. Review the plan. Confirm before running.</p><label>Profile</label><select id="profile"><option>custom</option><option>laravel</option></select><label>Local URL</label><input id="url" value="http://127.0.0.1:8000"><label>Tunnel name (named tunnel only)</label><input id="name" placeholder="my-project"><button id="check">Validate plan</button><button id="run" hidden>Confirm and execute</button><button id="copy" hidden>Copy AI help prompt</button><pre id="result">No plan yet.</pre></main><script>let plan,token;const $=id=>document.getElementById(id);fetch('/api/session').then(r=>r.json()).then(x=>token=x.confirmationToken);$('check').onclick=async()=>{const config={profile:$('profile').value,operation:$('name').value?'create':'quick',localUrl:$('url').value,tunnelName:$('name').value||undefined};const r=await fetch('/api/plan',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({config})});const x=await r.json();plan=x.plan;$('result').textContent=JSON.stringify({summary:plan?.summary,issues:x.issues,argv:plan?.argv,confirmations:plan?.confirmations},null,2);$('run').hidden=!x.valid;$('copy').hidden=x.valid;};$('run').onclick=async()=>{const r=await fetch('/api/execute',{method:'POST',headers:{'content-type':'application/json','x-confirmation-token':token},body:JSON.stringify({config:plan.config,confirmed:plan.confirmations})});$('result').textContent=JSON.stringify(await r.json(),null,2);};$('copy').onclick=()=>navigator.clipboard.writeText('I am configuring cloudflare-tunnel-kit. Here is the redacted diagnostic:\n'+$('result').textContent);</script>`;
+
+function validMutationRequest(req: IncomingMessage, token: string): boolean {
+  const received = String(req.headers['x-confirmation-token'] ?? '');
+  if (received.length !== token.length || !crypto.timingSafeEqual(Buffer.from(received), Buffer.from(token))) return false;
+  const host = String(req.headers.host ?? ''); if (host && !/^(127\.0\.0\.1|localhost)(:\d+)?$/i.test(host)) return false;
+  const origin = String(req.headers.origin ?? ''); return !origin || /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(origin);
+}
+function readBody(req: IncomingMessage, limit: number): Promise<string> { return new Promise((resolve, reject) => { let data = '', size = 0; req.on('data', chunk => { size += chunk.length; if (size > limit) { const error: any = new Error('Request body is too large.'); error.code = 'BODY_TOO_LARGE'; reject(error); req.destroy(); return; } data += chunk; }); req.on('end', () => resolve(data || '{}')); req.on('error', reject); }); }
+async function handle(res: ServerResponse, operation: () => Promise<any>) { try { return json(res, await operation()); } catch (error) { return json(res, { error: error instanceof Error ? error.message : String(error) }, 400); } }
+function secureHeaders(res: ServerResponse) { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"); res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('Cache-Control', 'no-store'); }
+function html(res: ServerResponse, value: string) { res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(value); }
+function json(res: ServerResponse, value: unknown, status = 200) { res.statusCode = status; res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(value)); }
