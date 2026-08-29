@@ -1,0 +1,7 @@
+{
+  "profile": "laravel",
+  "operation": "create",
+  "localUrl": "http://127.0.0.1:8000",
+  "tunnelName": "law-firm",
+  "laravel": { "mapAppUrl": true, "mapAssetUrl": false, "mapReverbUrl": false }
+}
