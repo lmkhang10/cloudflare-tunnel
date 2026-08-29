@@ -9,6 +9,7 @@
   "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
   "files": ["dist", "README.md", "LICENSE"],
   "scripts": { "build": "tsc", "test": "npm run build && node --test tests/**/*.test.js", "dev": "tsc --watch" },
+  "devDependencies": { "typescript": "^5.7.2" },
   "engines": { "node": ">=20" },
   "license": "MIT"
 }
