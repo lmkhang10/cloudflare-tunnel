@@ -55,6 +55,15 @@ export class TunnelKitService {
   async stop(projectId: string): Promise<void> { const tunnel = this.store.getTunnelForProject(projectId); return tunnel?.kind === 'named' ? this.namedWorkflow.stop(projectId) : this.quickWorkflow.stop(projectId); }
   async start(projectId: string): Promise<any> { return this.retry(projectId); }
   async restart(projectId: string): Promise<any> { try { await this.stop(projectId); } catch {} return this.start(projectId); }
+  async relinkProject(projectId: string, nextPath: string): Promise<void> { if (!nextPath?.trim()) throw new Error('A new project folder is required.'); this.store.relinkProject(projectId, nextPath); }
+  async removeLocal(projectId: string): Promise<void> {
+    let session; try { session = this.store.getLatestSession(projectId); } catch {}
+    if (session && this.supervisor.status(session.processKey).state === 'running') throw new Error('Stop the connector before removing this project from the local dashboard.');
+    this.store.removeProject(projectId);
+  }
+  async prepareCloudflareCleanup(projectId: string): Promise<any> {
+    const tunnel = this.store.getTunnelForProject(projectId); return { enabled: false, code: 'CLOUDFLARE_CLEANUP_NOT_ENABLED', resources: tunnel ? { tunnelUuid: tunnel.uuid, hostname: tunnel.hostname, configPath: tunnel.configPath } : {}, message: 'Cloudflare resource deletion is not enabled in this release. Remove resources explicitly in the Cloudflare dashboard.' };
+  }
   async doctor(): Promise<any> { const version = await this.cloudflare.version(); return { ok: version.ok, checks: [{ name: 'Node.js', state: 'passed', detail: process.version }, { name: 'cloudflared', state: version.ok ? 'passed' : 'failed', detail: version.ok ? version.value.version : version.error.summary }] }; }
   close(): void { this.database?.close(); }
 }

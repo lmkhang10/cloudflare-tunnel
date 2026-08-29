@@ -59,3 +59,16 @@ test('retries DNS permission failure without creating another tunnel', async () 
   await h.workflow.stop(second.projectId);
   h.db.close(); await rm(h.root, { recursive: true, force: true });
 });
+
+test('persists edited hostname and local URL when reusing a tunnel', async () => {
+  const h = await harness();
+  const first = await h.workflow.run(input(h.root));
+  await h.workflow.stop(first.projectId);
+  const edited = { ...input(h.root), localUrl: 'http://127.0.0.1:3000', hostname: 'preview.example.com' };
+  const second = await h.workflow.run(edited);
+  const saved = h.store.getTunnelForProject(second.projectId);
+  assert.equal(saved.localUrl, edited.localUrl);
+  assert.equal(saved.hostname, edited.hostname);
+  await h.workflow.stop(second.projectId);
+  h.db.close(); await rm(h.root, { recursive: true, force: true });
+});

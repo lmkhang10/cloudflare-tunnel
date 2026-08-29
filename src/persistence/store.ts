@@ -38,6 +38,16 @@ export class StateStore {
     return { id: row.id, displayName: row.display_name, path: row.path, profile: row.profile, createdAt: row.created_at, updatedAt: row.updated_at };
   }
 
+  relinkProject(id: string, nextPath: string): void {
+    const result = this.db.prepare('UPDATE projects SET path=?, updated_at=? WHERE id=?').run(nextPath, new Date().toISOString(), id);
+    if (!result.changes) throw new Error(`Project not found: ${id}`);
+  }
+
+  removeProject(id: string): void {
+    const result = this.db.prepare('DELETE FROM projects WHERE id=?').run(id);
+    if (!result.changes) throw new Error(`Project not found: ${id}`);
+  }
+
   saveTunnel(input: Omit<SavedTunnel, 'id'>): SavedTunnel {
     const existing = this.db.prepare('SELECT id FROM tunnels WHERE project_id=? ORDER BY updated_at DESC LIMIT 1').get(input.projectId) as { id: string } | undefined;
     const id = existing?.id ?? crypto.randomUUID(); const now = new Date().toISOString();
