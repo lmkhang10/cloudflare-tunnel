@@ -35,40 +35,52 @@ The toolkit does not concatenate user input into shell commands, print secrets t
 
 ## Installation
 
-Install the package after it is published:
+Install the package in the project that needs a tunnel:
 
 ```bash
 npm install --save-dev cloudflare-tunnel-kit
 ```
 
-For a source checkout:
+The package exposes the `cf-tunnel` binary locally. Run it through `npx` so no global installation is required:
 
 ```bash
-npm install
-npm run build
-node ./dist/cli/main.js --help
+npx cf-tunnel
+npx cf-tunnel ui
 ```
+
+You can also add project scripts:
+
+```json
+{
+  "scripts": {
+    "tunnel": "cf-tunnel",
+    "tunnel:ui": "cf-tunnel ui"
+  }
+}
+```
+
+Then run `npm run tunnel` or `npm run tunnel:ui`.
 
 ## CLI usage
 
 Check the local environment:
 
 ```bash
-cf-tunnel doctor
+npx cf-tunnel doctor
 ```
 
-Run `cf-tunnel` or `cf-tunnel init` without options to start the interactive text-only wizard. It asks for each value, validates before execution, prints a command preview, and asks for confirmation.
+Run `npx cf-tunnel` without options to start the interactive text-only wizard. It asks for each value, validates before execution, prints a command preview, and asks for confirmation.
 
 Preview a Quick Tunnel without starting `cloudflared`:
 
 ```bash
-cf-tunnel quick --url http://127.0.0.1:8000 --dry-run
+npx cf-tunnel quick --url http://127.0.0.1:8000 --dry-run
 ```
 
 Preview a named tunnel:
 
 ```bash
-cf-tunnel create \
+npx cf-tunnel create \
   --url http://127.0.0.1:8000 \
   --name my-project \
   --hostname tunnel.example.com \
@@ -78,39 +90,22 @@ cf-tunnel create \
 Lifecycle commands:
 
 ```text
-cf-tunnel start --name my-project
-cf-tunnel stop --name my-project
-cf-tunnel status --name my-project
+npx cf-tunnel start --name my-project
+npx cf-tunnel stop --name my-project
+npx cf-tunnel status --name my-project
 ```
 
 `--yes` does not bypass validation or Laravel `.env` confirmation.
-
-## Makefile shortcuts
-
-The repository includes a small Makefile for discoverable commands:
-
-```bash
-make setup
-make help
-make init
-make ui
-make quick URL=http://127.0.0.1:8000
-make create NAME=law-firm URL=http://127.0.0.1:8000
-make doctor
-make test
-```
-
-`make quick` and `make create` use `--dry-run` by default. Review the plan, then use the CLI to execute and confirm the operation explicitly.
 
 ## Live UI
 
 Start the local UI:
 
 ```bash
-cf-tunnel ui
+npx cf-tunnel ui
 ```
 
-Open the URL printed in the terminal, usually `http://127.0.0.1:<port>`. The wizard includes profile selection, local URL input, tunnel name, validation, plan preview, confirmation, execution, and a button to copy a redacted AI-help prompt.
+The command prints startup progress, chooses an available loopback port, and opens the browser automatically. If the browser cannot be opened, copy the printed `http://127.0.0.1:<port>` URL. Use `npx cf-tunnel ui --no-open` when you only want the URL.
 
 The UI binds to loopback by default and does not send the copied prompt anywhere.
 
@@ -119,8 +114,8 @@ The UI binds to loopback by default and does not send the copied prompt anywhere
 The custom profile makes no framework assumptions:
 
 ```bash
-cf-tunnel quick --profile custom --url http://127.0.0.1:3000 --dry-run
-cf-tunnel create --profile custom --url http://127.0.0.1:8000 --name billing --dry-run
+npx cf-tunnel quick --profile custom --url http://127.0.0.1:3000 --dry-run
+npx cf-tunnel create --profile custom --url http://127.0.0.1:8000 --name billing --hostname billing.example.com --dry-run
 ```
 
 ## Laravel profile
@@ -130,10 +125,11 @@ The Laravel adapter checks for `artisan` and Laravel evidence in `composer.json`
 Every mapping is shown as a diff and requires explicit confirmation. If `.env` is missing or ambiguous, the adapter stops with a remediation message instead of guessing.
 
 ```bash
-cf-tunnel create \
+npx cf-tunnel create \
   --profile laravel \
   --url http://127.0.0.1:8000 \
   --name law-firm \
+  --hostname law.example.com \
   --dry-run
 ```
 
@@ -213,6 +209,8 @@ npm publish
 An already-published `name@version` cannot be published again. See the [npm publish documentation](https://docs.npmjs.com/cli/commands/npm-publish/).
 
 ## Development
+
+These commands are only for contributors working from a source checkout. Projects that install the npm package do not need this repository's Makefile.
 
 ```bash
 npm install
