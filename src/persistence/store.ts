@@ -6,6 +6,8 @@ import type { Profile, TunnelKind, WorkflowStepState } from '../core/types.js';
 export interface SavedProject { id: string; displayName: string; path: string; profile: Profile; createdAt: string; updatedAt: string; }
 export interface SavedWorkflow { id: string; projectId: string; kind: TunnelKind; state: WorkflowStepState; currentStep?: string; steps: SavedWorkflowStep[]; }
 export interface SavedWorkflowStep { name: string; state: WorkflowStepState; attempts: number; effects: string[]; safeResult: unknown; error?: unknown; }
+export interface SavedSession { id: string; projectId: string; processKey: string; pid?: number; state: string; ephemeralUrl?: string; ephemeralUrlExpired: boolean; startedAt: string; stoppedAt?: string; }
+export interface SavedTunnel { id: string; projectId: string; kind: TunnelKind; name?: string; uuid?: string; hostname?: string; localUrl?: string; configPath?: string; credentialsPath?: string; }
 
 function safeJson(value: unknown): string { return JSON.stringify(redactValue(value)); }
 
@@ -28,6 +30,28 @@ export class StateStore {
   listProjects(): SavedProject[] {
     const rows = this.db.prepare('SELECT id, display_name, path, profile, created_at, updated_at FROM projects ORDER BY updated_at DESC').all() as any[];
     return rows.map(row => ({ id: row.id, displayName: row.display_name, path: row.path, profile: row.profile, createdAt: row.created_at, updatedAt: row.updated_at }));
+  }
+
+  getProject(id: string): SavedProject {
+    const row = this.db.prepare('SELECT id, display_name, path, profile, created_at, updated_at FROM projects WHERE id=?').get(id) as any;
+    if (!row) throw new Error(`Project not found: ${id}`);
+    return { id: row.id, displayName: row.display_name, path: row.path, profile: row.profile, createdAt: row.created_at, updatedAt: row.updated_at };
+  }
+
+  saveTunnel(input: Omit<SavedTunnel, 'id'>): SavedTunnel {
+    const existing = this.db.prepare('SELECT id FROM tunnels WHERE project_id=? ORDER BY updated_at DESC LIMIT 1').get(input.projectId) as { id: string } | undefined;
+    const id = existing?.id ?? crypto.randomUUID(); const now = new Date().toISOString();
+    this.db.prepare(`INSERT INTO tunnels(id, project_id, kind, name, uuid, hostname, local_url, config_path, credentials_path, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, name=excluded.name, uuid=excluded.uuid, hostname=excluded.hostname,
+      local_url=excluded.local_url, config_path=excluded.config_path, credentials_path=excluded.credentials_path, updated_at=excluded.updated_at`)
+      .run(id, input.projectId, input.kind, input.name ?? null, input.uuid ?? null, input.hostname ?? null, input.localUrl ?? null, input.configPath ?? null, input.credentialsPath ?? null, now, now);
+    return { id, ...input };
+  }
+
+  getTunnelForProject(projectId: string): SavedTunnel | undefined {
+    const row = this.db.prepare('SELECT * FROM tunnels WHERE project_id=? ORDER BY updated_at DESC LIMIT 1').get(projectId) as any;
+    return row ? { id: row.id, projectId: row.project_id, kind: row.kind, name: row.name ?? undefined, uuid: row.uuid ?? undefined, hostname: row.hostname ?? undefined, localUrl: row.local_url ?? undefined, configPath: row.config_path ?? undefined, credentialsPath: row.credentials_path ?? undefined } : undefined;
   }
 
   createWorkflow(input: { projectId: string; kind: TunnelKind }): { id: string } {
@@ -68,5 +92,29 @@ export class StateStore {
         error: row.error_json ? JSON.parse(row.error_json) : undefined,
       })),
     };
+  }
+
+  completeWorkflow(id: string, state: 'succeeded' | 'failed' | 'cancelled'): void {
+    const now = new Date().toISOString();
+    this.db.prepare('UPDATE workflow_runs SET state=?, updated_at=?, finished_at=? WHERE id=?').run(state, now, now, id);
+  }
+
+  saveSession(input: { projectId: string; processKey: string; pid?: number; state: string; ephemeralUrl?: string; executable?: string }): SavedSession {
+    const id = crypto.randomUUID();
+    const startedAt = new Date().toISOString();
+    this.db.prepare(`INSERT INTO process_sessions(id, project_id, process_key, pid, executable, state, ephemeral_url, started_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(id, input.projectId, input.processKey, input.pid ?? null, input.executable ?? null, input.state, input.ephemeralUrl ?? null, startedAt);
+    return { id, projectId: input.projectId, processKey: input.processKey, pid: input.pid, state: input.state, ephemeralUrl: input.ephemeralUrl, ephemeralUrlExpired: false, startedAt };
+  }
+
+  getLatestSession(projectId: string): SavedSession {
+    const row = this.db.prepare('SELECT * FROM process_sessions WHERE project_id=? ORDER BY started_at DESC LIMIT 1').get(projectId) as any;
+    if (!row) throw new Error(`Process session not found for project: ${projectId}`);
+    return { id: row.id, projectId: row.project_id, processKey: row.process_key, pid: row.pid ?? undefined, state: row.state, ephemeralUrl: row.ephemeral_url ?? undefined, ephemeralUrlExpired: Boolean(row.ephemeral_url_expired), startedAt: row.started_at, stoppedAt: row.stopped_at ?? undefined };
+  }
+
+  stopSession(id: string): void {
+    this.db.prepare('UPDATE process_sessions SET state=?, ephemeral_url_expired=1, stopped_at=? WHERE id=?').run('stopped', new Date().toISOString(), id);
   }
 }
