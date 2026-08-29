@@ -22,6 +22,21 @@ interface ErrorDefinition {
 }
 
 const definitions: Record<string, ErrorDefinition> = {
+  AUTH_STALE: {
+    title: 'Cloudflare login has expired',
+    summary: () => 'The saved Cloudflare account certificate is no longer accepted.',
+    likelyCause: 'The account permissions changed, the login was revoked, or the certificate is stale.',
+    remediationSteps: ['Sign in to Cloudflare again.', 'Retry the interrupted workflow step.'],
+    availableActions: ['sign-in-again', 'retry', 'copy-diagnostics'],
+    retryFromStep: 'authentication',
+  },
+  CLOUDFLARED_OUTPUT_UNRECOGNIZED: {
+    title: 'Cloudflare output was not recognized',
+    summary: () => 'cloudflared completed, but its output did not contain expected resource information.',
+    likelyCause: 'The installed cloudflared version may use an unsupported output format.',
+    remediationSteps: ['Check the installed cloudflared version.', 'Copy the redacted diagnostics when reporting this compatibility issue.'],
+    availableActions: ['retry', 'copy-diagnostics'],
+  },
   DNS_PERMISSION_DENIED: {
     title: 'DNS permission denied',
     summary: context => `Cloudflare did not allow this account to create a DNS record for ${context.hostname ?? 'the requested hostname'}.`,

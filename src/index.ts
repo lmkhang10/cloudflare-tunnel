@@ -1,6 +1,7 @@
 export * from './core/types.js';
 export * from './core/errors.js';
 export * from './core/validation.js';
+export * from './core/origin-check.js';
 export * from './core/plan.js';
 export * from './core/execution.js';
 export * from './core/redact.js';
@@ -8,3 +9,7 @@ export * from './adapters/laravel.js';
 export * from './app/paths.js';
 export * from './persistence/database.js';
 export * from './persistence/store.js';
+export * from './providers/command-runner.js';
+export * from './providers/cloudflared.js';
+export * from './providers/git-safety.js';
+export * from './providers/process-supervisor.js';
