@@ -44,6 +44,21 @@ npm run build
 node dist/cli/main.js --help
 ```
 
+## Makefile shortcuts
+
+Nếu thích command ngắn, package có Makefile:
+
+```bash
+make setup
+make help
+make init
+make ui
+make quick URL=http://127.0.0.1:8000
+make create NAME=law-firm URL=http://127.0.0.1:8000
+```
+
+`make quick` và `make create` mặc định chỉ preview (`--dry-run`). Sau khi review, dùng CLI trực tiếp để execute và xác nhận rõ ràng.
+
 ## CLI text-only
 
 Kiểm tra môi trường:
