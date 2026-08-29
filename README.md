@@ -2,6 +2,8 @@
 
 An open-source toolkit for creating and integrating Cloudflare Tunnels through two simple interfaces: a command-line wizard and a local live UI. It replaces scattered shell scripts and Makefile targets with a validated, reviewable, and confirmation-based workflow.
 
+![Demo](images/demo.png)
+
 ## Current version
 
 `0.1.0` is the current MVP and includes:
