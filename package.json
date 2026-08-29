@@ -1,6 +1,6 @@
 {
   "name": "cloudflare-tunnel-kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Safe, reusable Cloudflare Tunnel setup for custom and Laravel projects.",
   "type": "module",
   "bin": { "cf-tunnel": "dist/cli/main.js" },
