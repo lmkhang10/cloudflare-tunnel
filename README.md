@@ -1,84 +1,78 @@
 # cloudflare-tunnel-kit
 
-Thư viện mã nguồn mở giúp dự án tạo và tích hợp Cloudflare Tunnel bằng hai cách: command line hoặc live UI chạy cục bộ. Mục tiêu là thay thế các shell script/Makefile rời rạc bằng flow wizard có validation, preview và confirmation rõ ràng.
+An open-source toolkit for creating and integrating Cloudflare Tunnels through two simple interfaces: a command-line wizard and a local live UI. It replaces scattered shell scripts and Makefile targets with a validated, reviewable, and confirmation-based workflow.
 
 ## Current version
 
-`0.1.0` là bản MVP hiện có:
+`0.1.0` is the current MVP and includes:
 
-- Core TypeScript API cho validation, tạo plan, redaction và execution.
-- CLI `cf-tunnel` với `init`, `create`, `quick`, `start`, `stop`, `status`, `doctor`, `ui`.
-- Profile `custom` và Laravel detection với proposal mapping `APP_URL`.
-- Quick tunnel và named-tunnel argv generation.
-- Validation URL, hostname, tunnel name và path dưới project root.
-- Dry-run, structured errors và prompt an toàn để copy hỏi AI.
-- UI HTML/CSS/JS nhẹ, bind loopback, không cần frontend framework.
+- A reusable TypeScript API for validation, plan generation, execution, and redaction.
+- The `cf-tunnel` CLI with `init`, `create`, `quick`, `start`, `stop`, `status`, `doctor`, and `ui` commands.
+- `custom` and `laravel` project profiles.
+- Quick Tunnel and named-tunnel command generation.
+- URL, hostname, tunnel-name, and project-path validation.
+- Dry-run mode, structured errors, remediation guidance, and copyable AI help prompts.
+- A lightweight localhost UI with live plan preview and confirmation-token protection.
+- Laravel detection and `APP_URL` proposal/diff with explicit confirmation.
 
-Laravel `.env` mapping cho `APP_URL` đã có ở dạng proposal/diff; thao tác vẫn cần confirmation và hiện chưa tự động ghi file trong CLI/UI.
+Laravel `.env` changes are never written silently. The current MVP presents the proposed diff and requires confirmation; automatic file mutation is intentionally not enabled yet.
 
-## Ý tưởng và nguyên tắc
+## Design principles
 
-Flow luôn là: `input -> detect -> validate -> preview plan -> confirm -> execute -> summary`.
+The workflow is always:
 
-Không nối input thành shell command, không in secret ra log, không ghi đè config hoặc `.env` âm thầm. Người dùng luôn nhìn thấy command/file operation trước khi chạy.
+```text
+input -> detect -> validate -> preview plan -> confirm -> execute -> summary
+```
 
-## Yêu cầu
+The toolkit does not concatenate user input into shell commands, print secrets to logs, overwrite configuration silently, or send diagnostics to an external service.
 
-- Node.js 20 trở lên.
-- `cloudflared` trong `PATH` nếu muốn chạy tunnel thật.
-- Quyền Cloudflare phù hợp với loại named tunnel.
+## Requirements
 
-## Cài đặt
+- Node.js 20 or newer.
+- `cloudflared` available in `PATH` when starting a real tunnel.
+- Appropriate Cloudflare permissions for named tunnels.
 
-Khi package được phát hành:
+## Installation
+
+Install the package after it is published:
 
 ```bash
 npm install --save-dev cloudflare-tunnel-kit
 ```
 
-Trong source checkout:
+For a source checkout:
 
 ```bash
 npm install
 npm run build
-node dist/cli/main.js --help
+node ./dist/cli/main.js --help
 ```
 
-## Makefile shortcuts
+## CLI usage
 
-Nếu thích command ngắn, package có Makefile:
-
-```bash
-make setup
-make help
-make init
-make ui
-make quick URL=http://127.0.0.1:8000
-make create NAME=law-firm URL=http://127.0.0.1:8000
-```
-
-`make quick` và `make create` mặc định chỉ preview (`--dry-run`). Sau khi review, dùng CLI trực tiếp để execute và xác nhận rõ ràng.
-
-## CLI text-only
-
-Kiểm tra môi trường:
+Check the local environment:
 
 ```bash
 cf-tunnel doctor
 ```
 
-Chạy `cf-tunnel` hoặc `cf-tunnel init` không kèm options để mở interactive wizard text-only. Wizard hỏi từng bước, in lỗi kèm cách sửa, hiển thị command preview và hỏi xác nhận trước khi execute.
+Run `cf-tunnel` or `cf-tunnel init` without options to start the interactive text-only wizard. It asks for each value, validates before execution, prints a command preview, and asks for confirmation.
 
-Quick tunnel, chỉ validate/preview:
+Preview a Quick Tunnel without starting `cloudflared`:
 
 ```bash
 cf-tunnel quick --url http://127.0.0.1:8000 --dry-run
 ```
 
-Named tunnel sau khi review plan:
+Preview a named tunnel:
 
 ```bash
-cf-tunnel create --url http://127.0.0.1:8000 --name my-project --hostname tunnel.example.com
+cf-tunnel create \
+  --url http://127.0.0.1:8000 \
+  --name my-project \
+  --hostname tunnel.example.com \
+  --dry-run
 ```
 
 Lifecycle commands:
@@ -87,22 +81,42 @@ Lifecycle commands:
 cf-tunnel start --name my-project
 cf-tunnel stop --name my-project
 cf-tunnel status --name my-project
-cf-tunnel init --profile custom --url http://127.0.0.1:8000 --dry-run
 ```
 
-`--yes` không bỏ qua validation và không bypass confirmation của Laravel `.env`.
+`--yes` does not bypass validation or Laravel `.env` confirmation.
+
+## Makefile shortcuts
+
+The repository includes a small Makefile for discoverable commands:
+
+```bash
+make setup
+make help
+make init
+make ui
+make quick URL=http://127.0.0.1:8000
+make create NAME=law-firm URL=http://127.0.0.1:8000
+make doctor
+make test
+```
+
+`make quick` and `make create` use `--dry-run` by default. Review the plan, then use the CLI to execute and confirm the operation explicitly.
 
 ## Live UI
+
+Start the local UI:
 
 ```bash
 cf-tunnel ui
 ```
 
-Mở URL được in ra, thường là `http://127.0.0.1:<port>`. Wizard gồm profile, local URL, tunnel name, validation và plan preview. UI chỉ lắng nghe loopback. Nút copy tạo prompt AI đã loại bỏ secret; package không tự gửi prompt đó đi đâu.
+Open the URL printed in the terminal, usually `http://127.0.0.1:<port>`. The wizard includes profile selection, local URL input, tunnel name, validation, plan preview, confirmation, execution, and a button to copy a redacted AI-help prompt.
+
+The UI binds to loopback by default and does not send the copied prompt anywhere.
 
 ## Custom profile
 
-Custom profile không đoán framework:
+The custom profile makes no framework assumptions:
 
 ```bash
 cf-tunnel quick --profile custom --url http://127.0.0.1:3000 --dry-run
@@ -111,57 +125,104 @@ cf-tunnel create --profile custom --url http://127.0.0.1:8000 --name billing --d
 
 ## Laravel profile
 
-Laravel adapter kiểm tra `artisan` và `composer.json`, sau đó đề xuất mapping như `APP_URL`, `ASSET_URL` hoặc Reverb URL. Mỗi mapping phải hiện thành diff và cần confirmation riêng. Nếu `.env` thiếu hoặc không rõ, tool dừng với hướng dẫn; không tự đoán và không tự ghi ngầm.
+The Laravel adapter checks for `artisan` and Laravel evidence in `composer.json`. It can propose mappings such as `APP_URL`, `ASSET_URL`, and optional Reverb URLs.
+
+Every mapping is shown as a diff and requires explicit confirmation. If `.env` is missing or ambiguous, the adapter stops with a remediation message instead of guessing.
 
 ```bash
-cf-tunnel create --profile laravel --url http://127.0.0.1:8000 --name law-firm --dry-run
+cf-tunnel create \
+  --profile laravel \
+  --url http://127.0.0.1:8000 \
+  --name law-firm \
+  --dry-run
 ```
 
 ## API
 
 ```ts
-import { validateTunnelConfig, createTunnelPlan, executeTunnelPlan } from 'cloudflare-tunnel-kit';
+import {
+  validateTunnelConfig,
+  createTunnelPlan,
+  executeTunnelPlan,
+} from 'cloudflare-tunnel-kit';
 
-const config = { profile: 'custom', operation: 'quick', localUrl: 'http://127.0.0.1:8000' };
+const config = {
+  profile: 'custom',
+  operation: 'quick',
+  localUrl: 'http://127.0.0.1:8000',
+};
+
 const validation = validateTunnelConfig(config);
-if (!validation.ok) for (const error of validation.issues) console.error(error.code, error.reason, error.fix);
+if (!validation.ok) {
+  for (const error of validation.issues) {
+    console.error(error.code, error.reason, error.fix);
+  }
+}
+
 const plan = createTunnelPlan(config);
 const result = await executeTunnelPlan(plan, { dryRun: true });
 console.log(result);
 ```
 
-Plan có thể serialize để hiển thị trong hệ thống riêng. Chỉ execute plan đã validated và sau khi người dùng approve confirmation group.
+Plans are serializable and can be displayed inside another system. Execute only validated plans and provide the required confirmation groups.
 
 ## Error model
 
-Mỗi lỗi có `code`, `field` (nếu có), `reason` và `fix`. Mã thường gặp: `INPUT_INVALID_URL`, `INPUT_INVALID_HOSTNAME`, `INPUT_INVALID_TUNNEL_NAME`, `PATH_OUTSIDE_PROJECT`, `CONFIRMATION_REQUIRED`, `PROCESS_FAILED`.
+Every error includes a stable `code`, optional `field`, `reason`, and `fix`. Common codes include:
 
-Khi copy lỗi để hỏi AI, kiểm tra lại prompt đã redact trước khi dán vào dịch vụ bên ngoài.
+- `INPUT_INVALID_URL`: the local URL is not HTTP/HTTPS.
+- `INPUT_INVALID_HOSTNAME`: the hostname is not valid.
+- `INPUT_INVALID_TUNNEL_NAME`: the tunnel name is unsafe.
+- `PATH_OUTSIDE_PROJECT`: the config path escapes the project root.
+- `CONFIRMATION_REQUIRED`: a mutation has not been confirmed.
+- `PROCESS_FAILED`: `cloudflared` failed or could not be started.
+
+Review the redacted prompt before pasting it into an external AI service.
 
 ## Security model
 
-- UI bind `127.0.0.1` mặc định.
-- Process chạy argv array với shell disabled.
-- Secret-looking key/value, bearer token và credential path được redact.
-- File path được kiểm tra dưới project root.
-- Dry-run không gọi cloudflared.
-- Config overwrite và Laravel `.env` write phải được preview và confirm.
-- Không gửi telemetry hoặc diagnostic ra ngoài.
+- The UI binds to `127.0.0.1` by default.
+- Child processes use argv arrays with shell execution disabled.
+- Secret-looking keys/values, bearer tokens, and credential paths are redacted.
+- File paths are checked against the project root.
+- Dry-run does not start `cloudflared`.
+- Configuration overwrite and Laravel `.env` changes require a visible plan and confirmation.
+- No telemetry or diagnostics are sent externally.
 
-Tool không thay thế việc review Cloudflare account permissions, DNS, access policy hoặc secret management của tổ chức.
+This toolkit does not replace review of Cloudflare account permissions, DNS, access policies, or organizational secret management.
 
-## Phát triển
+## Publishing to npm
+
+After logging in to npm and completing any required 2FA verification:
 
 ```bash
+npm install
+npm run build
+npm test
+npm pack --dry-run
+npm publish
+```
+
+Increase the version before publishing a new release:
+
+```bash
+npm version patch
+npm publish
+```
+
+An already-published `name@version` cannot be published again. See the [npm publish documentation](https://docs.npmjs.com/cli/commands/npm-publish/).
+
+## Development
+
+```bash
+npm install
 npm test
 npm run build
 git diff --check
 ```
 
-GitHub Actions hiện chỉ chạy CI build/test với Node.js 24. Project không dùng `actions/deploy-pages` vì live UI là local Node server, không phải static site chạy trên GitHub Pages.
-
-Test dùng Node built-ins và temporary fixtures; không cần Cloudflare account. Khi đóng góp, thêm test trước cho behavior mới và không đưa secret thật vào fixture.
+Tests use Node built-ins and temporary fixtures; no Cloudflare account is required. Add tests before introducing new behavior, do not place real secrets in fixtures, and keep remediation messages actionable.
 
 ## License
 
-MIT. Xem [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
