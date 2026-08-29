@@ -1,5 +1,43 @@
 export type Profile = 'custom' | 'laravel';
 export type Operation = 'quick' | 'create' | 'start' | 'stop' | 'status';
+export type TunnelKind = 'quick' | 'named';
+export type WorkflowStepState = 'pending' | 'running' | 'succeeded' | 'warning' | 'failed' | 'skipped' | 'cancelled';
+export type NamedStep =
+  | 'environment' | 'input' | 'origin' | 'filesystem' | 'git-safety'
+  | 'authentication' | 'account-access' | 'tunnel' | 'configuration'
+  | 'ingress-validation' | 'dns-route' | 'connector'
+  | 'cloudflare-health' | 'public-health';
+export type RecoveryAction =
+  | 'retry' | 'sign-in-again' | 'change-input' | 'open-dashboard'
+  | 'copy-diagnostics' | 'stop' | 'force-stop';
+
+export interface TunnelError {
+  code: string;
+  title: string;
+  summary: string;
+  likelyCause: string;
+  completedEffects: string[];
+  remediationSteps: string[];
+  availableActions: RecoveryAction[];
+  safeDiagnostics?: Record<string, unknown>;
+  retryFromStep?: NamedStep;
+}
+
+export interface WorkflowStepResult {
+  name: string;
+  state: WorkflowStepState;
+  attempts: number;
+  startedAt?: string;
+  finishedAt?: string;
+  effects: string[];
+  error?: TunnelError;
+}
+
+export function stepState(value: string): WorkflowStepState {
+  const values: WorkflowStepState[] = ['pending', 'running', 'succeeded', 'warning', 'failed', 'skipped', 'cancelled'];
+  if (!values.includes(value as WorkflowStepState)) throw new Error(`Unknown workflow step state: ${value}`);
+  return value as WorkflowStepState;
+}
 
 export interface TunnelConfig {
   profile: Profile;

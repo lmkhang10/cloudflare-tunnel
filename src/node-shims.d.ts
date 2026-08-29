@@ -1,4 +1,4 @@
-declare const process: { cwd(): string; argv: string[]; exitCode?: number };
+declare const process: { cwd(): string; argv: string[]; exitCode?: number; platform: string; env: Record<string, string | undefined> };
 declare module 'node:path' { const path: any; export default path; }
 declare module 'node:fs' { export const realpathSync: any; export const promises: any; export const existsSync: any; export const readFileSync: any; }
 declare module 'node:crypto' { const crypto: { randomUUID(): string }; export default crypto; }
