@@ -6,7 +6,7 @@ An open-source toolkit for creating and integrating Cloudflare Tunnels through t
 
 ## Current version
 
-`0.1.0` is the current MVP and includes:
+`0.1.4` is the current MVP and includes:
 
 - A reusable TypeScript API for validation, plan generation, execution, and redaction.
 - The `cf-tunnel` CLI with `init`, `create`, `quick`, `start`, `stop`, `status`, `doctor`, and `ui` commands.
