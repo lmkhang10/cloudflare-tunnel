@@ -158,6 +158,8 @@ npm run build
 git diff --check
 ```
 
+GitHub Actions hiện chỉ chạy CI build/test với Node.js 24. Project không dùng `actions/deploy-pages` vì live UI là local Node server, không phải static site chạy trên GitHub Pages.
+
 Test dùng Node built-ins và temporary fixtures; không cần Cloudflare account. Khi đóng góp, thêm test trước cho behavior mới và không đưa secret thật vào fixture.
 
 ## License
