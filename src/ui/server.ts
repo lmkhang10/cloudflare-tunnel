@@ -40,11 +40,11 @@ export function createServer(options: { service?: any; sessionToken?: string; ma
 function validMutationRequest(req: IncomingMessage, token: string): boolean {
   const received = String(req.headers['x-confirmation-token'] ?? '');
   if (received.length !== token.length || !crypto.timingSafeEqual(Buffer.from(received), Buffer.from(token))) return false;
-  const host = String(req.headers.host ?? ''); if (host && !/^(127\.0\.0\.1|localhost)(:\d+)?$/i.test(host)) return false;
+  const host = String(req.headers.host ?? ''); if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/i.test(host)) return false;
   const origin = String(req.headers.origin ?? ''); return !origin || /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(origin);
 }
 function readBody(req: IncomingMessage, limit: number): Promise<string> { return new Promise((resolve, reject) => { let data = '', size = 0; req.on('data', chunk => { size += chunk.length; if (size > limit) { const error: any = new Error('Request body is too large.'); error.code = 'BODY_TOO_LARGE'; reject(error); req.destroy(); return; } data += chunk; }); req.on('end', () => resolve(data || '{}')); req.on('error', reject); }); }
 async function handle(res: ServerResponse, operation: () => Promise<any>) { try { return json(res, await operation()); } catch (error) { return json(res, { error: error instanceof Error ? error.message : String(error) }, 400); } }
-function secureHeaders(res: ServerResponse) { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"); res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('Cache-Control', 'no-store'); }
+function secureHeaders(res: ServerResponse) { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"); res.setHeader('X-Frame-Options', 'DENY'); res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()'); res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('Cache-Control', 'no-store'); }
 function html(res: ServerResponse, value: string) { res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(value); }
 function json(res: ServerResponse, value: unknown, status = 200) { res.statusCode = status; res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(value)); }
