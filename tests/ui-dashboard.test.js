@@ -21,6 +21,11 @@ test('renders the English project dashboard and both guided setup choices', () =
   assert.match(html, /document\.body\.style\.overflow='hidden'/);
   assert.match(html, /e\.key==='Escape'/);
   assert.match(html, /wizardTrigger\?\.focus/);
+  assert.match(html, /<div class="drawer-overlay" data-close>/);
+  assert.match(html, /<button class="close" data-close/);
+  assert.match(html, /<button class="btn ghost" data-close>Cancel/);
+  assert.match(html, /target===overlay/);
+  assert.match(html, /!running/);
 });
 
 test('creates a service-injected UI server', () => {
