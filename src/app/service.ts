@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync, statSync } from 'node:fs';
 import type Database from 'better-sqlite3';
 import { resolveAppPaths } from './paths.js';
 import { openStateDatabase } from '../persistence/database.js';
@@ -55,7 +55,15 @@ export class TunnelKitService {
   async stop(projectId: string): Promise<void> { const tunnel = this.store.getTunnelForProject(projectId); return tunnel?.kind === 'named' ? this.namedWorkflow.stop(projectId) : this.quickWorkflow.stop(projectId); }
   async start(projectId: string): Promise<any> { return this.retry(projectId); }
   async restart(projectId: string): Promise<any> { try { await this.stop(projectId); } catch {} return this.start(projectId); }
-  async relinkProject(projectId: string, nextPath: string): Promise<void> { if (!nextPath?.trim()) throw new Error('A new project folder is required.'); this.store.relinkProject(projectId, nextPath); }
+  async relinkProject(projectId: string, nextPath: string): Promise<void> {
+    if (!nextPath?.trim()) throw new Error('A new project folder is required.');
+    let resolved: string;
+    try { resolved = realpathSync(nextPath); } catch { throw new Error('The new project path must be an existing project directory.'); }
+    if (!statSync(resolved).isDirectory()) throw new Error('The new project path must be an existing project directory.');
+    const duplicate = this.store.listProjects().find((project: any) => project.path === resolved && project.id !== projectId);
+    if (duplicate) throw new Error('Another local project already uses this folder.');
+    this.store.relinkProject(projectId, resolved);
+  }
   async removeLocal(projectId: string): Promise<void> {
     let session; try { session = this.store.getLatestSession(projectId); } catch {}
     if (session && this.supervisor.status(session.processKey).state === 'running') throw new Error('Stop the connector before removing this project from the local dashboard.');

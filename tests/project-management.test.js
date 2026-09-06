@@ -1,21 +1,31 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { openStateDatabase, StateStore, TunnelKitService } from '../dist/index.js';
 
 test('relinks a project and removes only local records', async () => {
   const root = await mkdtemp(path.join(tmpdir(), 'cf-project-management-'));
+  await mkdir(path.join(root, 'old')); await mkdir(path.join(root, 'new'));
   const db = openStateDatabase(path.join(root, 'state.db')); const store = new StateStore(db);
   const project = store.saveProject({ displayName: 'Shop', path: path.join(root, 'old'), profile: 'custom' });
   const calls = [];
   const service = new TunnelKitService({ store, supervisor: { status: () => ({ state: 'stopped', logs: '' }) }, quickWorkflow: {}, namedWorkflow: {}, cloudflare: { delete: async () => calls.push('delete') } });
   await service.relinkProject(project.id, path.join(root, 'new'));
-  assert.equal(store.getProject(project.id).path, path.join(root, 'new'));
+  assert.equal(store.getProject(project.id).path, await realpath(path.join(root, 'new')));
   await service.removeLocal(project.id);
   assert.equal(store.listProjects().length, 0);
   assert.deepEqual(calls, []);
+  db.close(); await rm(root, { recursive: true, force: true });
+});
+
+test('rejects relinking to a missing project folder', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'cf-project-invalid-relink-'));
+  const db = openStateDatabase(path.join(root, 'state.db')); const store = new StateStore(db);
+  const project = store.saveProject({ displayName: 'Shop', path: root, profile: 'custom' });
+  const service = new TunnelKitService({ store, supervisor: {}, quickWorkflow: {}, namedWorkflow: {}, cloudflare: {} });
+  await assert.rejects(service.relinkProject(project.id, path.join(root, 'missing')), /existing project directory/);
   db.close(); await rm(root, { recursive: true, force: true });
 });
 
