@@ -122,7 +122,7 @@ Start the local UI:
 npx cf-tunnel ui
 ```
 
-The command prints startup progress, chooses an available loopback port, and opens the browser automatically. If the browser cannot be opened, copy the printed `http://127.0.0.1:<port>` URL. Use `npx cf-tunnel ui --no-open` when you only want the URL.
+The command prints startup progress, chooses an available loopback port, and opens the browser automatically. If the browser cannot be opened, copy the printed `http://127.0.0.1:<port>` URL. Use `npx cf-tunnel ui --no-open` when you only want the URL. To use a fixed port, pass `--port 8787`; when omitted, `CLOUDFLARE_TUNNEL_KIT_UI_PORT` is used if set, otherwise an available port is selected. Ports are always bound to `127.0.0.1`.
 
 The UI binds to loopback by default and does not send the copied prompt anywhere.
 

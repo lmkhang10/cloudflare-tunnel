@@ -23,3 +23,16 @@ test('non-interactive invocation does not hang when input is missing', async () 
   assert.match(result.output, /INTERACTIVE_INPUT_REQUIRED/);
   assert.match(result.output, /npx cf-tunnel ui/);
 });
+
+test('CLI help documents configurable loopback UI ports', async () => {
+  const result = await new Promise(resolve => {
+    const child = spawn(process.execPath, ['dist/cli/main.js', 'help'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    let output = '';
+    child.stdout.on('data', value => output += value);
+    child.stderr.on('data', value => output += value);
+    child.on('close', code => resolve({ code, output }));
+  });
+  assert.equal(result.code, 0);
+  assert.match(result.output, /--port PORT/);
+  assert.match(result.output, /CLOUDFLARE_TUNNEL_KIT_UI_PORT/);
+});

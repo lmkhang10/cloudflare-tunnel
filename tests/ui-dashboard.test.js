@@ -29,6 +29,9 @@ test('renders the English project dashboard and both guided setup choices', () =
   assert.match(html, /publicUrl/);
   assert.match(html, /Copy URL/);
   assert.match(html, /navigator\.clipboard\.writeText/);
+  assert.match(html, /data-action="details"/);
+  assert.match(html, /\/api\/projects\//);
+  assert.match(html, /cloudflareConnector/);
 });
 
 test('creates a service-injected UI server', () => {
