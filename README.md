@@ -43,6 +43,21 @@ Install the package in the project that needs a tunnel:
 npm install --save-dev cloudflare-tunnel-kit
 ```
 
+For a machine-wide command available from any directory, install it globally:
+
+```bash
+npm install --global cloudflare-tunnel-kit
+```
+
+Then use either command name:
+
+```bash
+cf-tunnel doctor
+cftunnel ui
+```
+
+Both commands use the same local application data directory and can be run from any project folder. The global install provides the CLI; `cloudflared` is still a separate prerequisite.
+
 The package exposes the `cf-tunnel` binary locally. Run it through `npx` so no global installation is required:
 
 ```bash

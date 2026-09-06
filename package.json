@@ -4,7 +4,8 @@
   "description": "Safe, reusable Cloudflare Tunnel setup for custom and Laravel projects.",
   "type": "module",
   "bin": {
-    "cf-tunnel": "dist/cli/main.js"
+    "cf-tunnel": "dist/cli/main.js",
+    "cftunnel": "dist/cli/main.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

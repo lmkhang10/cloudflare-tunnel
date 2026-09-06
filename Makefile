@@ -7,11 +7,12 @@ URL ?= http://127.0.0.1:8000
 NAME ?= my-project
 HOSTNAME ?=
 
-.PHONY: help setup build test init doctor ui quick create start stop status
+.PHONY: help setup global build test init doctor ui quick create start stop status
 
 help: ## Xem các lệnh
 	@printf "Cloudflare Tunnel Kit\n\n"
-	@printf "  make setup              Cài dependency và build\n"
+  @printf "  make setup              Cài dependency và build\n"
+  @printf "  make global             Cài CLI global (cf-tunnel và cftunnel)\n"
 	@printf "  make init               Wizard text-only\n"
 	@printf "  make ui                 Mở live UI local\n"
 	@printf "  make quick URL=...      Preview quick tunnel\n"
@@ -22,6 +23,10 @@ help: ## Xem các lệnh
 setup: ## Cài dependency và build
 	$(NPM) install
 	$(NPM) run build
+
+global: build ## Đóng gói và cài CLI global từ source hiện tại
+	$(NPM) pack
+	$(NPM) install --global ./cloudflare-tunnel-kit-$(shell node -p "require('./package.json').version").tgz
 
 build: ## Build package
 	$(NPM) run build
