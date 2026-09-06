@@ -4,13 +4,25 @@ import { domainToASCII } from 'node:url';
 import type { TunnelConfig, ValidationIssue, ValidationResult } from './types.js';
 
 function issue(code: string, reason: string, fix: string, field?: string): ValidationIssue { return { code, reason, fix, field }; }
+function safeOrigin(url: URL, input: TunnelConfig): ValidationIssue | undefined {
+  if (url.username || url.password) return issue('INPUT_UNSAFE_ORIGIN', 'localUrl must not contain username or password information.', 'Remove credentials from the URL and configure authentication in the local application.', 'localUrl');
+  const hostname = url.hostname.toLowerCase();
+  const loopback = hostname === 'localhost' || hostname === '::1' || hostname === '127.0.0.1' || hostname.startsWith('127.');
+  if (loopback) return undefined;
+  if (input.allowPrivateNetwork || input.allowPublicOrigin) return undefined;
+  return issue('INPUT_UNSAFE_ORIGIN', 'Only loopback origins are allowed by default.', 'Use localhost or 127.0.0.1, or explicitly enable the reviewed advanced network option.', 'localUrl');
+}
 function inside(root: string, candidate: string): boolean {
   try { const r = realpathSync(root); const c = realpathSync(path.dirname(candidate)); return c === r || c.startsWith(r + path.sep); } catch { return path.resolve(candidate).startsWith(path.resolve(root) + path.sep); }
 }
 export function validateTunnelConfig(input: TunnelConfig): ValidationResult {
   const issues: ValidationIssue[] = [];
   let url: URL | undefined;
-  try { url = new URL(input.localUrl); if (!['http:', 'https:'].includes(url.protocol)) throw new Error(); } catch { issues.push(issue('INPUT_INVALID_URL', 'localUrl must be an http or https URL.', 'Use a value such as http://127.0.0.1:8000.', 'localUrl')); }
+  try {
+    url = new URL(input.localUrl);
+    if (!['http:', 'https:'].includes(url.protocol)) throw new Error('invalid protocol');
+    const unsafe = safeOrigin(url, input); if (unsafe) issues.push(unsafe);
+  } catch { issues.push(issue('INPUT_INVALID_URL', 'localUrl must be an http or https URL.', 'Use a value such as http://127.0.0.1:8000.', 'localUrl')); }
   if (!['custom', 'laravel'].includes(input.profile)) issues.push(issue('INPUT_INVALID_PROFILE', 'Unknown project profile.', 'Choose custom or laravel.', 'profile'));
   if (input.operation === 'create' && !input.tunnelName) issues.push(issue('INPUT_TUNNEL_NAME_REQUIRED', 'Named tunnels require a tunnel name.', 'Use lowercase letters, numbers, and hyphens.', 'tunnelName'));
   if (input.operation === 'create' && !input.hostname) issues.push(issue('INPUT_HOSTNAME_REQUIRED', 'Named tunnels require a public hostname.', 'Use a hostname from a domain already managed by Cloudflare, such as dev.example.com.', 'hostname'));

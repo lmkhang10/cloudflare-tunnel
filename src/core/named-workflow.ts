@@ -66,6 +66,10 @@ export class NamedTunnelWorkflow {
       await runner.step('tunnel', async () => ({ value: { uuid: tunnel!.uuid }, effects: [`Created tunnel ${input.tunnelName} (${tunnel!.uuid}).`] }));
     }
     if (!tunnel.uuid || !tunnel.credentialsPath || !tunnel.configPath) throw new Error('Saved tunnel identity is incomplete.');
+    if (tunnel.hostname !== input.hostname || tunnel.localUrl !== input.localUrl || tunnel.name !== input.tunnelName) {
+      tunnel = this.store.saveTunnel({ ...tunnel, hostname: input.hostname, localUrl: input.localUrl, name: input.tunnelName });
+      if (!tunnel.uuid || !tunnel.credentialsPath || !tunnel.configPath) throw new Error('Saved tunnel identity is incomplete.');
+    }
     try { const credentialStat = await stat(tunnel.credentialsPath); if (!credentialStat.isFile()) throw new Error(); } catch { const error = { code: 'TUNNEL_CREDENTIALS_MISSING', reason: 'The tunnel credential file is missing.', fix: 'Restore the credential file or create a new tunnel.' }; runner.fail('configuration', error); return { state: 'failed', projectId, runId: run.id, error }; }
     await mkdir(path.dirname(tunnel.configPath), { recursive: true, mode: 0o700 });
     const yaml = `tunnel: ${JSON.stringify(tunnel.uuid)}\ncredentials-file: ${JSON.stringify(tunnel.credentialsPath)}\ningress:\n  - hostname: ${JSON.stringify(input.hostname)}\n    service: ${JSON.stringify(input.localUrl)}\n  - service: http_status:404\n`;

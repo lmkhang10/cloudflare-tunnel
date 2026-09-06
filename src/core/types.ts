@@ -47,6 +47,8 @@ export interface TunnelConfig {
   tunnelName?: string;
   hostname?: string;
   configPath?: string;
+  allowPublicOrigin?: boolean;
+  allowPrivateNetwork?: boolean;
   laravel?: { mapAppUrl?: boolean; mapAssetUrl?: boolean; mapReverbUrl?: boolean };
 }
 

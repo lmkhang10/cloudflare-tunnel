@@ -21,7 +21,8 @@
   ],
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test tests/**/*.test.js",
+    "test": "npm run build && npm run test:unit",
+    "test:unit": "node --test --test-timeout=10000 tests/**/*.test.js",
     "dev": "tsc --watch"
   },
   "devDependencies": {

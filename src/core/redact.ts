@@ -2,7 +2,11 @@ import type { ValidationIssue } from './types.js';
 const secretKey = /(token|secret|password|private|credential|key|cert)/i;
 export function redact(value: string, key?: string): string {
   if (key && secretKey.test(key)) return '[REDACTED]';
-  return value.replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]').replace(/([A-Za-z0-9_-]{24,})/g, '[REDACTED]');
+  return value
+    .replace(/-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----/gi, '[REDACTED PEM]')
+    .replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]')
+    .replace(/([?&](?:token|secret|password|api[_-]?key|signature|credential)=)[^&\s]+/gi, '$1[REDACTED]')
+    .replace(/([A-Za-z0-9_-]{24,})/g, '[REDACTED]');
 }
 export function redactValue(value: unknown, key?: string): unknown {
   if (key && secretKey.test(key)) return '[REDACTED]';
