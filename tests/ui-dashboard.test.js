@@ -26,6 +26,9 @@ test('renders the English project dashboard and both guided setup choices', () =
   assert.match(html, /<button class="btn ghost" data-close>Cancel/);
   assert.match(html, /target===overlay/);
   assert.match(html, /!running/);
+  assert.match(html, /publicUrl/);
+  assert.match(html, /Copy URL/);
+  assert.match(html, /navigator\.clipboard\.writeText/);
 });
 
 test('creates a service-injected UI server', () => {
