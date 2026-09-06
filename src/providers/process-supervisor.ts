@@ -72,6 +72,13 @@ export class ProcessSupervisor {
       session.child.once('close', () => { clearTimeout(timer); resolve(true); });
     });
     if (stopped) session.state = 'stopped';
-    return { stopped, forceRequired: !stopped };
+    if (stopped) return { stopped: true, forceRequired: false };
+    session.child.kill('SIGKILL');
+    const forceStopped = await new Promise<boolean>(resolve => {
+      const timer = setTimeout(() => resolve(false), graceMs);
+      session.child.once('close', () => { clearTimeout(timer); resolve(true); });
+    });
+    if (forceStopped) session.state = 'stopped';
+    return { stopped: forceStopped, forceRequired: true };
   }
 }
