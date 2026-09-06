@@ -11,9 +11,16 @@ test('renders the English project dashboard and both guided setup choices', () =
   assert.match(html, /Saved projects/);
   assert.match(html, /Review changes/);
   assert.match(html, /data-action="doctor"/);
-  assert.match(html, /v0\.1\.5/);
+  assert.match(html, /v0\.1\.7/);
   assert.match(html, /Remove local/);
   assert.doesNotMatch(html, /No plan yet/);
+  assert.match(html, /class="drawer"/);
+  assert.match(html, /class="drawer-overlay"/);
+  assert.match(html, /role="dialog" aria-modal="true"/);
+  assert.doesNotMatch(html, /<dialog|showModal\(/);
+  assert.match(html, /document\.body\.style\.overflow='hidden'/);
+  assert.match(html, /e\.key==='Escape'/);
+  assert.match(html, /wizardTrigger\?\.focus/);
 });
 
 test('creates a service-injected UI server', () => {
