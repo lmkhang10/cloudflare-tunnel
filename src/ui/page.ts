@@ -1,4 +1,4 @@
-export function dashboardPage(version = '0.1.7'): string {
+export function dashboardPage(version = '0.1.8'): string {
   return String.raw`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cloudflare Tunnel Kit v${escapeAttribute(version)}</title>

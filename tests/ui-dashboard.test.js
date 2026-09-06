@@ -11,7 +11,7 @@ test('renders the English project dashboard and both guided setup choices', () =
   assert.match(html, /Saved projects/);
   assert.match(html, /Review changes/);
   assert.match(html, /data-action="doctor"/);
-  assert.match(html, /v0\.1\.7/);
+  assert.match(html, /v0\.1\.8/);
   assert.match(html, /Remove local/);
   assert.doesNotMatch(html, /No plan yet/);
   assert.match(html, /class="drawer"/);
