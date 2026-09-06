@@ -14,8 +14,9 @@ function interactiveRequired(): never { console.error('[INTERACTIVE_INPUT_REQUIR
 
 async function startUi() {
   console.log('Starting Cloudflare Tunnel Kit UI on this machine...');
-  const service = createTunnelKitService({ dataDir: process.env.CLOUDFLARE_TUNNEL_KIT_DATA_DIR }); const server = createServer({ service });
+  const service = createTunnelKitService({ dataDir: process.env.CLOUDFLARE_TUNNEL_KIT_DATA_DIR }); const server = createServer({ service, version: packageVersion });
   server.once('error', error => { console.error(`Unable to start the local UI: ${error.message}`); console.error('Run `npx cf-tunnel ui` again after checking local server permissions.'); process.exitCode = 1; service.close(); });
+  console.log(`Cloudflare Tunnel Kit v${packageVersion}`);
   server.listen(0, '127.0.0.1', async () => { const address = server.address(); if (!address || typeof address === 'string') return; const url = `http://127.0.0.1:${address.port}`; console.log(`UI ready at ${url}`); if (!args.includes('--no-open')) console.log((await launchBrowser(url)).message); });
   process.once('SIGINT', () => server.close(() => { service.close(); process.exit(130); }));
 }

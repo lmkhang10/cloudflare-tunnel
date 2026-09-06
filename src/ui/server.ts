@@ -9,12 +9,12 @@ const emptyService = {
   execute: async () => ({ state: 'skipped', message: 'No service configured.' }), start: async () => ({}), stop: async () => ({}), retry: async () => ({}), restart: async () => ({}),
 };
 
-export function createServer(options: { service?: any; sessionToken?: string; maxBodyBytes?: number } = {}): Server {
+export function createServer(options: { service?: any; sessionToken?: string; maxBodyBytes?: number; version?: string } = {}): Server {
   const service = options.service ?? emptyService; const token = options.sessionToken ?? crypto.randomUUID(); const maxBodyBytes = options.maxBodyBytes ?? 64 * 1024;
   return httpServer(async (req, res) => {
     secureHeaders(res);
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
-    if (req.method === 'GET' && url.pathname === '/') return html(res, dashboardPage());
+    if (req.method === 'GET' && url.pathname === '/') return html(res, dashboardPage(options.version));
     if (req.method === 'GET' && url.pathname === '/api/session') return json(res, { confirmationToken: token });
     if (req.method === 'GET' && url.pathname === '/api/projects') return handle(res, async () => ({ projects: await service.listProjects() }));
     if (req.method === 'GET' && url.pathname === '/api/doctor') return handle(res, () => service.doctor());
