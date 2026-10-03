@@ -71,7 +71,7 @@ npm-login: ## Đăng nhập npm
 
 publish-check: test ## Test + xem trước package sẽ publish
 	@$(NPM) whoami >/dev/null || (echo "Chưa đăng nhập npm. Chạy: make npm-login" && exit 1)
-	$(NPM) publish --dry-run
+	$(NPM) pack --dry-run
 
 publish: publish-check ## Publish version hiện tại lên npm
 	@test -z "$$(git status --porcelain)" || (echo "Working tree chưa sạch, commit trước khi publish." && exit 1)
