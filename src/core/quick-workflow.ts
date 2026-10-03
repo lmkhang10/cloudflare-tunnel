@@ -1,5 +1,6 @@
 import path from 'node:path';
 import type { Profile } from './types.js';
+import { validateTunnelConfig } from './validation.js';
 import { checkOrigin, type OriginCheckResult } from './origin-check.js';
 import { WorkflowRunner } from './workflow.js';
 import type { StateStore } from '../persistence/store.js';
@@ -19,6 +20,8 @@ export class QuickTunnelWorkflow {
   }
 
   async run(input: { projectPath: string; displayName?: string; profile: Profile; localUrl: string }): Promise<any> {
+    const validation = validateTunnelConfig({ profile: input.profile, operation: 'quick', localUrl: input.localUrl, projectRoot: input.projectPath });
+    if (!validation.ok) return { state: 'failed', error: validation.issues[0], issues: validation.issues };
     const project = this.store.saveProject({ displayName: input.displayName ?? path.basename(input.projectPath), path: path.resolve(input.projectPath), profile: input.profile });
     this.store.saveTunnel({ projectId: project.id, kind: 'quick', localUrl: input.localUrl });
     const run = this.store.createWorkflow({ projectId: project.id, kind: 'quick' });
@@ -30,6 +33,11 @@ export class QuickTunnelWorkflow {
     }
     await runner.step('origin', async () => ({ state: origin.warning ? 'warning' : 'succeeded', value: origin, effects: ['Verified the local application is reachable.'] }));
     const sessionKey = `quick:${project.id}`;
+    if (['starting', 'running', 'stopping'].includes(this.supervisor.status(sessionKey).state)) {
+      const error = { code: 'CONNECTOR_ALREADY_RUNNING', reason: 'A Quick Tunnel connector is already running for this project.', fix: 'Stop or restart the project instead of starting it again.' };
+      runner.fail('connector', error);
+      return { state: 'failed', projectId: project.id, runId: run.id, error };
+    }
     try {
       const session = await this.supervisor.start({ key: sessionKey, executable: this.executable, args: [...this.baseArgs, 'tunnel', '--url', input.localUrl], env: this.env });
       const logs = await session.waitForOutput(/https:\/\/[-a-z0-9]+\.trycloudflare\.com/i, 15_000);

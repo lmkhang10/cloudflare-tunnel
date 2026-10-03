@@ -8,7 +8,7 @@ if (process.env.FAKE_CLOUDFLARED_RECORD) {
 
 if (scenario === 'quick-running') {
   console.log('INF Requesting new quick Tunnel on trycloudflare.com...');
-  setTimeout(() => console.log('INF + https://calm-river-123.trycloudflare.com'), 30);
+  setTimeout(() => console.log('INF + https://bulletin-tribe-catalog-pleasure.trycloudflare.com'), 30);
   setInterval(() => console.log('DBG connector heartbeat'), 1000);
 } else if (scenario === 'connector-running') {
   console.log('INF Registered tunnel connection');

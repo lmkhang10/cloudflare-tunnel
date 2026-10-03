@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import path from 'node:path';
 import { existsSync, realpathSync, statSync } from 'node:fs';
 import type Database from 'better-sqlite3';
 import { resolveAppPaths } from './paths.js';
@@ -8,6 +9,8 @@ import { ProcessSupervisor } from '../providers/process-supervisor.js';
 import { CloudflaredAdapter } from '../providers/cloudflared.js';
 import { QuickTunnelWorkflow } from '../core/quick-workflow.js';
 import { NamedTunnelWorkflow } from '../core/named-workflow.js';
+
+const PLAN_TTL_MS = 10 * 60_000;
 
 interface PreparedPlan { id: string; kind: 'quick' | 'named'; input: any; effects: string[]; confirmations: string[]; createdAt: number; }
 
@@ -39,12 +42,14 @@ export class TunnelKitService {
   async prepareQuick(input: any): Promise<PreparedPlan> { return this.savePlan('quick', input, [`Start a temporary Quick Tunnel to ${input.localUrl}.`], ['start-connector']); }
   async prepareNamed(input: any): Promise<PreparedPlan> { return this.savePlan('named', input, [`Create or reuse tunnel ${input.tunnelName}.`, `Create DNS route ${input.hostname}.`, `Start a connector to ${input.localUrl}.`], ['cloudflare-resources', 'start-connector']); }
   private savePlan(kind: 'quick' | 'named', input: any, effects: string[], confirmations: string[]): PreparedPlan {
+    for (const [id, saved] of this.plans) if (Date.now() - saved.createdAt > PLAN_TTL_MS) this.plans.delete(id);
     const plan = { id: crypto.randomUUID(), kind, input, effects, confirmations, createdAt: Date.now() }; this.plans.set(plan.id, plan); return plan;
   }
 
   async execute(id: string, confirmations: string[]): Promise<any> {
     const plan = this.plans.get(id); if (!plan) throw new Error('Plan not found or expired.');
-    if (Date.now() - plan.createdAt > 10 * 60_000) { this.plans.delete(id); throw new Error('Plan expired. Review the settings again.'); }
+    if (Date.now() - plan.createdAt > PLAN_TTL_MS) { this.plans.delete(id); throw new Error('Plan expired. Review the settings again.'); }
+    if (!Array.isArray(confirmations)) throw new Error('Confirmations must be a list of confirmed operations.');
     const missing = plan.confirmations.filter(item => !confirmations.includes(item));
     if (missing.length) throw new Error(`Confirmation required for: ${missing.join(', ')}`);
     this.plans.delete(id);
@@ -77,7 +82,7 @@ export class TunnelKitService {
 }
 
 export function createTunnelKitService(options: { dataDir?: string; cloudflaredExecutable?: string } = {}): TunnelKitService {
-  const paths = options.dataDir ? { dataDir: options.dataDir, database: `${options.dataDir}/state.db`, projectsDir: `${options.dataDir}/projects`, backupsDir: `${options.dataDir}/backups` } : resolveAppPaths();
+  const paths = options.dataDir ? { dataDir: options.dataDir, database: path.join(options.dataDir, 'state.db'), projectsDir: path.join(options.dataDir, 'projects'), backupsDir: path.join(options.dataDir, 'backups') } : resolveAppPaths();
   const database = openStateDatabase(paths.database); const store = new StateStore(database); const supervisor = new ProcessSupervisor();
   const cloudflare = new CloudflaredAdapter({ executable: options.cloudflaredExecutable });
   const quickWorkflow = new QuickTunnelWorkflow({ store, supervisor, executable: options.cloudflaredExecutable });

@@ -15,6 +15,8 @@ export class ManagedSession {
     this.pid = child.pid;
   }
 
+  markExited(): void { this.events.emit('exit'); }
+
   append(value: string): void {
     this.logText = Buffer.from(this.logText + redact(value)).subarray(-this.maxLogBytes).toString('utf8');
     this.events.emit('output', this.logText);
@@ -29,9 +31,12 @@ export class ManagedSession {
         if (!pattern.test(logs)) return;
         cleanup(); resolve(logs);
       };
+      const exited = () => { cleanup(); reject(new Error('The process exited before producing the expected output.')); };
       const timeout = setTimeout(() => { cleanup(); reject(new Error(`Timed out waiting for process output: ${pattern}`)); }, timeoutMs);
-      const cleanup = () => { clearTimeout(timeout); this.events.off('output', output); };
+      const cleanup = () => { clearTimeout(timeout); this.events.off('output', output); this.events.off('exit', exited); };
       this.events.on('output', output);
+      if (['stopped', 'failed'].includes(this.state)) return exited();
+      this.events.once('exit', exited);
     });
   }
 }
@@ -50,7 +55,7 @@ export class ProcessSupervisor {
     this.sessions.set(options.key, session);
     child.stdout?.on('data', chunk => session.append(chunk.toString('utf8')));
     child.stderr?.on('data', chunk => session.append(chunk.toString('utf8')));
-    child.on('close', code => { session.state = code === 0 || session.state === 'stopping' ? 'stopped' : 'failed'; });
+    child.on('close', code => { session.state = code === 0 || session.state === 'stopping' ? 'stopped' : 'failed'; session.markExited(); });
     return new Promise((resolve, reject) => {
       child.once('spawn', () => { session.state = 'running'; resolve(session); });
       child.once('error', error => { session.state = 'failed'; session.append(error.message); reject(error); });

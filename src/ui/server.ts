@@ -19,7 +19,7 @@ export function createServer(options: { service?: any; sessionToken?: string; ma
     if (req.method === 'GET' && url.pathname === '/api/projects') return handle(res, async () => ({ projects: await service.listProjects() }));
     if (req.method === 'GET' && url.pathname === '/api/doctor') return handle(res, () => service.doctor());
     const detail = url.pathname.match(/^\/api\/projects\/([^/]+)$/);
-    if (req.method === 'GET' && detail) return handle(res, () => service.getProject(detail[1]));
+    if (req.method === 'GET' && detail) return handle(res, () => service.getProject(decodeURIComponent(detail[1])));
     if (req.method === 'POST') {
       if (!validMutationRequest(req, token)) return json(res, { error: 'The local UI session is missing or invalid. Reload the page and try again.' }, 403);
       if (!String(req.headers['content-type'] ?? '').toLowerCase().startsWith('application/json')) return json(res, { error: 'Requests must use application/json.' }, 415);
@@ -29,9 +29,9 @@ export function createServer(options: { service?: any; sessionToken?: string; ma
       if (url.pathname === '/api/plans/named') return handle(res, () => service.prepareNamed(body));
       if (url.pathname === '/api/execute') return handle(res, () => service.execute(body.planId, body.confirmations ?? []));
       const action = url.pathname.match(/^\/api\/projects\/([^/]+)\/(start|stop|retry|restart)$/);
-      if (action) return handle(res, () => service[action[2]](action[1]));
+      if (action) return handle(res, () => service[action[2]](decodeURIComponent(action[1])));
       const management = url.pathname.match(/^\/api\/projects\/([^/]+)\/(relink|remove-local)$/);
-      if (management) return handle(res, () => management[2] === 'relink' ? service.relinkProject(management[1], body.path) : service.removeLocal(management[1]));
+      if (management) return handle(res, () => management[2] === 'relink' ? service.relinkProject(decodeURIComponent(management[1]), body.path) : service.removeLocal(decodeURIComponent(management[1])));
       if (url.pathname === '/api/plan') {
         const config = body.config ?? {}; return handle(res, async () => ({ plan: config.operation === 'quick' ? await service.prepareQuick({ projectPath: config.projectRoot ?? process.cwd(), ...config }) : await service.prepareNamed({ projectPath: config.projectRoot ?? process.cwd(), ...config }) }));
       }

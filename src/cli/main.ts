@@ -9,16 +9,17 @@ import { runWizard } from './wizard.js';
 const args = process.argv.slice(2); const command = args[0] ?? 'init';
 const packageVersion = (JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 const value = (name: string) => { const index = args.indexOf(name); return index >= 0 ? args[index + 1] : undefined; };
-function help() { console.log(`cloudflare-tunnel-kit ${packageVersion}\n\nUsage from an installed project:\n  npx cf-tunnel\n  npx cf-tunnel ui [--port PORT]\n\nCommands: init create quick start stop restart status doctor ui\nOptions: --url URL --name NAME --hostname HOST --profile custom|laravel --project ID --port PORT --dry-run --yes --json --no-open\nUI port precedence: --port, CLOUDFLARE_TUNNEL_KIT_UI_PORT, automatic`); }
+function help() { console.log(`cloudflare-tunnel-kit ${packageVersion}\n\nUsage from an installed project:\n  npx cf-tunnel\n  npx cf-tunnel ui [--port PORT]\n\nCommands: init create quick start stop restart status doctor ui\nOptions: --url URL --name NAME --hostname HOST --path DIR --project-name NAME --profile custom|laravel --project ID --port PORT --dry-run --yes --json --no-open\nUI port precedence: --port, CLOUDFLARE_TUNNEL_KIT_UI_PORT, automatic`); }
 function interactiveRequired(): never { console.error('[INTERACTIVE_INPUT_REQUIRED] This command needs wizard input, but the terminal is not interactive.\nRun `npx cf-tunnel ui` or provide all required flags with `--yes`.'); process.exit(2); }
 function resolveUiPort(): number { const raw = value('--port') ?? process.env.CLOUDFLARE_TUNNEL_KIT_UI_PORT; if (raw === undefined || raw === '') return 0; const port = Number(raw); if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error(`Invalid UI port "${raw}". Use an integer from 0 to 65535.`); return port; }
 
 async function startUi() {
+  const port = resolveUiPort();
   console.log('Starting Cloudflare Tunnel Kit UI on this machine...');
   const service = createTunnelKitService({ dataDir: process.env.CLOUDFLARE_TUNNEL_KIT_DATA_DIR }); const server = createServer({ service, version: packageVersion });
   server.once('error', error => { console.error(`Unable to start the local UI: ${error.message}`); console.error('Run `npx cf-tunnel ui` again after checking local server permissions.'); process.exitCode = 1; service.close(); });
   console.log(`Cloudflare Tunnel Kit v${packageVersion}`);
-  server.listen(resolveUiPort(), '127.0.0.1', async () => { const address = server.address(); if (!address || typeof address === 'string') return; const url = `http://127.0.0.1:${address.port}`; console.log(`UI ready at ${url}`); if (!args.includes('--no-open')) console.log((await launchBrowser(url)).message); });
+  server.listen(port, '127.0.0.1', async () => { const address = server.address(); if (!address || typeof address === 'string') return; const url = `http://127.0.0.1:${address.port}`; console.log(`UI ready at ${url}`); if (!args.includes('--no-open')) console.log((await launchBrowser(url)).message); });
   process.once('SIGINT', () => server.close(() => { service.close(); process.exit(130); }));
 }
 

@@ -24,7 +24,7 @@ test('starts, persists, and stops a Quick Tunnel without waiting for process exi
 
   const result = await workflow.run({ projectPath: root, displayName: 'Quick Shop', profile: 'custom', localUrl: 'http://127.0.0.1:8000' });
   assert.equal(result.state, 'succeeded');
-  assert.equal(result.publicUrl, 'https://calm-river-123.trycloudflare.com');
+  assert.equal(result.publicUrl, 'https://bulletin-tribe-catalog-pleasure.trycloudflare.com');
   assert.equal(supervisor.status(result.sessionKey).state, 'running');
   assert.equal(store.listProjects().length, 1);
   assert.equal(store.getLatestSession(result.projectId).ephemeralUrl, result.publicUrl);

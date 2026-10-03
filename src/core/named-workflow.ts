@@ -82,7 +82,9 @@ export class NamedTunnelWorkflow {
     if (!routed.ok) { runner.fail('dns-route', routed.error); return { state: 'failed', projectId, runId: run.id, error: routed.error, configPath: tunnel.configPath }; }
     await runner.step('dns-route', async () => ({ value: routed.value, effects: [`Routed ${input.hostname} to the tunnel.`] }));
     const sessionKey = `named:${tunnel.uuid}`;
-    const session = await this.supervisor.start({ key: sessionKey, executable: this.executable, args: [...this.baseArgs, 'tunnel', '--config', tunnel.configPath, 'run', tunnel.uuid], env: this.env });
+    let session;
+    try { session = await this.supervisor.start({ key: sessionKey, executable: this.executable, args: [...this.baseArgs, 'tunnel', '--config', tunnel.configPath, 'run', tunnel.uuid], env: this.env }); }
+    catch (cause) { const error = { code: 'CONNECTOR_START_FAILED', reason: cause instanceof Error ? cause.message : String(cause), fix: 'Stop any running connector for this project, check that cloudflared is installed, and retry.' }; runner.fail('connector', error); return { state: 'failed', projectId, runId: run.id, error, configPath: tunnel.configPath }; }
     await runner.step('connector', async () => ({ value: { pid: session.pid }, effects: ['Started the Cloudflare connector.'] }));
     const info = await this.cloudflare.info(tunnel.uuid);
     await runner.step('cloudflare-health', async () => ({ state: info.ok && info.value.connectorState === 'healthy' ? 'succeeded' : 'warning', value: info.ok ? info.value : info.error, effects: [] }));

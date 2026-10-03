@@ -6,7 +6,7 @@ export function redact(value: string, key?: string): string {
     .replace(/-----BEGIN [^-]+-----[\s\S]*?-----END [^-]+-----/gi, '[REDACTED PEM]')
     .replace(/(Bearer\s+)[^\s]+/gi, '$1[REDACTED]')
     .replace(/([?&](?:token|secret|password|api[_-]?key|signature|credential)=)[^&\s]+/gi, '$1[REDACTED]')
-    .replace(/([A-Za-z0-9_-]{24,})/g, '[REDACTED]');
+    .replace(/(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{24,}(?![A-Za-z0-9_-]|\.trycloudflare\.com)/g, '[REDACTED]');
 }
 export function redactValue(value: unknown, key?: string): unknown {
   if (key && secretKey.test(key)) return '[REDACTED]';
