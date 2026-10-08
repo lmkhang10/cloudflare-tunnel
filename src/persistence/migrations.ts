@@ -77,4 +77,26 @@ export const migrations: Migration[] = [{
       checked_at TEXT NOT NULL
     );
   `,
+}, {
+  version: 2,
+  sql: `
+    CREATE TABLE settings (
+      key TEXT PRIMARY KEY,
+      value_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE TABLE cloudflare_accounts (
+      id TEXT PRIMARY KEY,
+      label TEXT NOT NULL,
+      account_tag TEXT,
+      cert_path TEXT NOT NULL,
+      source TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'unverified',
+      last_verified_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    ALTER TABLE tunnels ADD COLUMN account_id TEXT REFERENCES cloudflare_accounts(id) ON DELETE SET NULL;
+    ALTER TABLE projects ADD COLUMN auto_start INTEGER NOT NULL DEFAULT 0;
+  `,
 }];

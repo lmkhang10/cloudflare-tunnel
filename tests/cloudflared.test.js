@@ -45,3 +45,26 @@ test('passes hostile tunnel names as literal argv without shell execution', asyn
   assert.deepEqual(calls[0], ['tunnel', 'create', 'shop;touch-pwned']);
   await h.dispose();
 });
+
+test('selects the account with --origincert and stores credentials in the app folder', async () => {
+  const h = await harness('create-success');
+  const root = await mkdtemp(path.join(tmpdir(), 'cf-adapter-account-'));
+  const adapter = new CloudflaredAdapter({ executable: process.execPath, baseArgs: [fixture], originCert: '/accounts/work/cert.pem', env: { ...process.env, FAKE_CLOUDFLARED_RECORD: h.record } });
+  const credentialsFile = path.join(root, 'shop.json');
+  const created = await adapter.createTunnel('shop', { credentialsFile });
+  assert.equal(created.value.credentialsFile, credentialsFile);
+  await adapter.routeDns('11111111-1111-4111-8111-111111111111', 'dev.example.com');
+  await adapter.validateIngress('/app/config.yml');
+  const calls = (await readFile(h.record, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.deepEqual(calls[0], ['tunnel', '--origincert', '/accounts/work/cert.pem', 'create', '--credentials-file', credentialsFile, 'shop']);
+  assert.deepEqual(calls[1], ['tunnel', '--origincert', '/accounts/work/cert.pem', 'route', 'dns', '11111111-1111-4111-8111-111111111111', 'dev.example.com']);
+  assert.deepEqual(calls[2], ['tunnel', '--config', '/app/config.yml', 'ingress', 'validate'], 'cloudflared only accepts --config before the subcommand');
+  await rm(root, { recursive: true, force: true }); await h.dispose();
+});
+
+test('classifies a missing certificate as AUTH_REQUIRED', async () => {
+  const h = await harness('auth-missing');
+  const result = await h.adapter.listTunnels();
+  assert.equal(result.error.code, 'AUTH_REQUIRED');
+  await h.dispose();
+});

@@ -41,9 +41,19 @@ export class ManagedSession {
   }
 }
 
+export interface ConnectorExit { key: string; state: ManagedProcessState; code: number | null; expected: boolean; }
+
 export class ProcessSupervisor {
   private readonly sessions = new Map<string, ManagedSession>();
   private readonly maxLogBytes: number;
+  private readonly events = new EventEmitter();
+
+  /** Fires after a connector exits; `expected` is false when nobody asked it to stop. */
+  onExit(listener: (exit: ConnectorExit) => void): () => void { this.events.on('exit', listener); return () => this.events.off('exit', listener); }
+
+  runningKeys(): string[] { return [...this.sessions.values()].filter(session => ['starting', 'running'].includes(session.state)).map(session => session.key); }
+
+  async stopAll(graceMs?: number): Promise<void> { await Promise.all(this.runningKeys().map(key => this.stop(key, graceMs))); }
 
   constructor(options: { maxLogBytes?: number } = {}) { this.maxLogBytes = options.maxLogBytes ?? 256 * 1024; }
 
@@ -55,7 +65,11 @@ export class ProcessSupervisor {
     this.sessions.set(options.key, session);
     child.stdout?.on('data', chunk => session.append(chunk.toString('utf8')));
     child.stderr?.on('data', chunk => session.append(chunk.toString('utf8')));
-    child.on('close', code => { session.state = code === 0 || session.state === 'stopping' ? 'stopped' : 'failed'; session.markExited(); });
+    child.on('close', code => {
+      const expected = session.state === 'stopping';
+      session.state = code === 0 || expected ? 'stopped' : 'failed'; session.markExited();
+      if (this.sessions.get(options.key) === session) this.events.emit('exit', { key: options.key, state: session.state, code, expected });
+    });
     return new Promise((resolve, reject) => {
       child.once('spawn', () => { session.state = 'running'; resolve(session); });
       child.once('error', error => { session.state = 'failed'; session.append(error.message); reject(error); });

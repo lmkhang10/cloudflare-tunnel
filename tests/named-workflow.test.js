@@ -35,12 +35,21 @@ async function harness({ denyDnsOnce = false, requireLogin = false } = {}) {
 
 const input = root => ({ projectPath: path.join(root, 'shop'), displayName: 'Shop', profile: 'custom', localUrl: 'http://127.0.0.1:8000', tunnelName: 'shop-local', hostname: 'dev.example.com' });
 
-test('completes authentication, create, config, DNS, connector, and health', async () => {
+test('stops at authentication instead of replacing the Cloudflare login silently', async () => {
   const h = await harness({ requireLogin: true });
+  const result = await h.workflow.run(input(h.root));
+  assert.equal(result.state, 'failed');
+  assert.equal(result.error.code, 'AUTH_STALE');
+  assert.equal(h.counts().loginCalls, 0);
+  assert.equal(h.counts().createCalls, 0);
+  h.db.close(); await rm(h.root, { recursive: true, force: true });
+});
+
+test('completes create, config, DNS, connector, and health', async () => {
+  const h = await harness();
   const result = await h.workflow.run(input(h.root));
   assert.equal(result.state, 'succeeded');
   assert.equal(result.publicUrl, 'https://dev.example.com');
-  assert.equal(h.counts().loginCalls, 1);
   const config = await readFile(result.configPath, 'utf8');
   assert.match(config, /hostname: "dev\.example\.com"/);
   assert.equal(config.includes(h.root + '/shop'), false);
@@ -71,4 +80,30 @@ test('persists edited hostname and local URL when reusing a tunnel', async () =>
   assert.equal(saved.hostname, edited.hostname);
   await h.workflow.stop(second.projectId);
   h.db.close(); await rm(h.root, { recursive: true, force: true });
+});
+
+test('creates the tunnel with the selected account and keeps it on retry', async () => {
+  const h = await harness();
+  const accounts = [];
+  const db = h.db; const store = h.store;
+  const account = store.saveAccount({ label: 'work', accountTag: 'a'.repeat(32), certPath: path.join(h.root, 'cert.pem'), source: 'import' });
+  const credentialsDir = path.join(h.root, 'accounts', account.id);
+  const base = { async version() { return { ok: true, value: { version: 'x' } }; }, async listTunnels() { return { ok: true, value: [] }; }, async validateIngress() { return { ok: true, value: { valid: true } }; }, async routeDns(_t, hostname) { return { ok: true, value: { hostname } }; }, async info() { return { ok: true, value: { connectorState: 'healthy' } }; } };
+  const workflow = new NamedTunnelWorkflow({
+    store, supervisor: h.supervisor, projectsDir: path.join(h.root, 'projects'), executable: process.execPath, baseArgs: [fixture],
+    env: { ...process.env, FAKE_CLOUDFLARED_SCENARIO: 'connector-running' },
+    cloudflareFor: accountId => { accounts.push(accountId); return { ...base, async createTunnel(_name, options) { await writeFile(options.credentialsFile, '{}'); return { ok: true, value: { uuid: '22222222-2222-4222-8222-222222222222', credentialsFile: options.credentialsFile } }; } }; },
+    credentialsFileFor: (accountId, name) => accountId ? path.join(credentialsDir, `${name}.json`) : undefined,
+    originCheck: async () => ({ reachable: true, status: 200 }), publicCheck: async () => ({ reachable: true, status: 200 }),
+  });
+  const first = await workflow.run({ ...input(h.root), accountId: account.id });
+  assert.equal(first.state, 'succeeded');
+  const saved = store.getTunnelForProject(first.projectId);
+  assert.equal(saved.accountId, account.id);
+  assert.equal(saved.credentialsPath, path.join(credentialsDir, 'shop-local.json'));
+  await workflow.stop(first.projectId);
+  await workflow.retry(first.projectId);
+  assert.deepEqual(accounts, [account.id, account.id]);
+  await workflow.stop(first.projectId);
+  db.close(); await rm(h.root, { recursive: true, force: true });
 });

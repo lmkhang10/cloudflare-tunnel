@@ -9,14 +9,16 @@ import type { ProcessSupervisor } from '../providers/process-supervisor.js';
 export class QuickTunnelWorkflow {
   private readonly store: StateStore;
   private readonly supervisor: ProcessSupervisor;
-  private readonly executable: string;
+  private readonly executable: () => string;
   private readonly baseArgs: string[];
+  private readonly runArgs: () => string[];
   private readonly env?: NodeJS.ProcessEnv;
   private readonly originCheck: (url: string) => Promise<OriginCheckResult>;
 
-  constructor(options: { store: StateStore; supervisor: ProcessSupervisor; executable?: string; baseArgs?: string[]; env?: NodeJS.ProcessEnv; originCheck?: (url: string) => Promise<OriginCheckResult> }) {
-    this.store = options.store; this.supervisor = options.supervisor; this.executable = options.executable ?? 'cloudflared';
-    this.baseArgs = options.baseArgs ?? []; this.env = options.env; this.originCheck = options.originCheck ?? (url => checkOrigin(url));
+  constructor(options: { store: StateStore; supervisor: ProcessSupervisor; executable?: string | (() => string); baseArgs?: string[]; runArgs?: () => string[]; env?: NodeJS.ProcessEnv; originCheck?: (url: string) => Promise<OriginCheckResult> }) {
+    const executable = options.executable ?? 'cloudflared';
+    this.store = options.store; this.supervisor = options.supervisor; this.executable = typeof executable === 'function' ? executable : () => executable;
+    this.baseArgs = options.baseArgs ?? []; this.runArgs = options.runArgs ?? (() => []); this.env = options.env; this.originCheck = options.originCheck ?? (url => checkOrigin(url));
   }
 
   async run(input: { projectPath: string; displayName?: string; profile: Profile; localUrl: string }): Promise<any> {
@@ -39,12 +41,12 @@ export class QuickTunnelWorkflow {
       return { state: 'failed', projectId: project.id, runId: run.id, error };
     }
     try {
-      const session = await this.supervisor.start({ key: sessionKey, executable: this.executable, args: [...this.baseArgs, 'tunnel', '--url', input.localUrl], env: this.env });
+      const session = await this.supervisor.start({ key: sessionKey, executable: this.executable(), args: [...this.baseArgs, 'tunnel', ...this.runArgs(), '--url', input.localUrl], env: this.env });
       const logs = await session.waitForOutput(/https:\/\/[-a-z0-9]+\.trycloudflare\.com/i, 15_000);
       const publicUrl = logs.match(/https:\/\/[-a-z0-9]+\.trycloudflare\.com/i)?.[0];
       if (!publicUrl) throw new Error('Quick Tunnel URL was not received.');
       await runner.step('connector', async () => ({ value: { publicUrl }, effects: [`Started Quick Tunnel at ${publicUrl}.`] }));
-      this.store.saveSession({ projectId: project.id, processKey: sessionKey, pid: session.pid, state: 'running', ephemeralUrl: publicUrl, executable: this.executable });
+      this.store.saveSession({ projectId: project.id, processKey: sessionKey, pid: session.pid, state: 'running', ephemeralUrl: publicUrl, executable: this.executable() });
       this.store.completeWorkflow(run.id, 'succeeded');
       return { state: 'succeeded', projectId: project.id, runId: run.id, sessionKey, publicUrl };
     } catch (error) {

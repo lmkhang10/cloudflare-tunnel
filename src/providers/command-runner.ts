@@ -6,7 +6,7 @@ export interface CommandResult {
 
 export function runCommand(options: {
   executable: string; args: string[]; env?: NodeJS.ProcessEnv; cwd?: string;
-  timeoutMs?: number; signal?: AbortSignal; maxOutputBytes?: number;
+  timeoutMs?: number; signal?: AbortSignal; maxOutputBytes?: number; onOutput?: (chunk: string) => void;
 }): Promise<CommandResult> {
   const timeoutMs = options.timeoutMs ?? 30_000;
   const maxOutputBytes = options.maxOutputBytes ?? 256 * 1024;
@@ -15,8 +15,8 @@ export function runCommand(options: {
     let stdout = '', stderr = '', timedOut = false;
     const child = spawn(options.executable, options.args, { cwd: options.cwd, env: options.env, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
     const append = (current: string, chunk: Buffer): string => Buffer.from(current + chunk.toString('utf8')).subarray(-maxOutputBytes).toString('utf8');
-    child.stdout.on('data', (chunk: Buffer) => { stdout = append(stdout, chunk); });
-    child.stderr.on('data', (chunk: Buffer) => { stderr = append(stderr, chunk); });
+    child.stdout.on('data', (chunk: Buffer) => { stdout = append(stdout, chunk); options.onOutput?.(chunk.toString('utf8')); });
+    child.stderr.on('data', (chunk: Buffer) => { stderr = append(stderr, chunk); options.onOutput?.(chunk.toString('utf8')); });
     const finish = (exitCode: number, signal: string | null) => {
       if (settled) return;
       settled = true; clearTimeout(timer); options.signal?.removeEventListener('abort', abort);

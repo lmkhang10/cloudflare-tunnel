@@ -22,6 +22,14 @@ interface ErrorDefinition {
 }
 
 const definitions: Record<string, ErrorDefinition> = {
+  AUTH_REQUIRED: {
+    title: 'Cloudflare account not connected',
+    summary: () => 'cloudflared could not find a Cloudflare account certificate for this operation.',
+    likelyCause: 'No account has been connected yet, or the selected account certificate was moved or deleted.',
+    remediationSteps: ['Connect a Cloudflare account in Settings → Accounts, or run `cftunnel account login`.', 'Select that account for the project and retry.'],
+    availableActions: ['sign-in-again', 'retry', 'copy-diagnostics'],
+    retryFromStep: 'authentication',
+  },
   AUTH_STALE: {
     title: 'Cloudflare login has expired',
     summary: () => 'The saved Cloudflare account certificate is no longer accepted.',

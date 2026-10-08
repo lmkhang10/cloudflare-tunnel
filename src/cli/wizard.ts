@@ -10,6 +10,20 @@ export function formatWizardSummary(plan: Pick<TunnelPlan, 'valid'|'summary'|'is
   return lines.join('\n');
 }
 
+export function launcherMenu(): string {
+  return `How do you want to open Cloudflare Tunnel Kit?\n\n  1. Open the app (menu bar icon + window)\n  2. Open the dashboard in your browser\n  3. Use the terminal wizard`;
+}
+
+/** Asks which interface to open; returns null when the answer is not 1-3. */
+export async function chooseLauncher(status: string): Promise<'app' | 'browser' | 'terminal' | null> {
+  const rl = createInterface({ input: stdin, output: stdout });
+  try {
+    console.log(`\nCloudflare Tunnel Kit\n${status}\n\n${launcherMenu()}`);
+    const choice = (await rl.question('\nChoose [1-3] (1): ')).trim() || '1';
+    return ({ '1': 'app', '2': 'browser', '3': 'terminal' } as const)[choice as '1' | '2' | '3'] ?? null;
+  } finally { rl.close(); }
+}
+
 export function mainMenu(): string {
   return `What would you like to do?\n\n  1. Create a Quick Tunnel\n  2. Set up a custom domain\n  3. Open a saved project\n  4. Check system requirements`;
 }
@@ -37,7 +51,7 @@ export async function runWizard(service: any, initialMode?: 'quick' | 'named'): 
     }
     const plan = mode === 'quick' ? await service.prepareQuick(input) : await service.prepareNamed(input);
     console.log('\nReview changes:'); for (const effect of plan.effects) console.log(`  - ${effect}`);
-    if (mode === 'named') console.log('  - Cloudflare login may open in your browser if authentication is missing or stale.');
+    if (mode === 'named') console.log('  - Uses your default Cloudflare account. Connect or choose accounts with `cftunnel account`.');
     const answer = (await rl.question('\nConfirm and run? [y/N]: ')).trim().toLowerCase();
     if (!['y', 'yes'].includes(answer)) { console.log('Cancelled. No changes were made.'); return; }
     console.log('\nRunning validated workflow...');

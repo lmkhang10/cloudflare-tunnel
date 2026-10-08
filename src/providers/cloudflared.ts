@@ -10,19 +10,29 @@ export class CloudflaredAdapter {
   private readonly executable: string;
   private readonly baseArgs: string[];
   private readonly env: NodeJS.ProcessEnv;
+  private readonly originCert?: string;
 
-  constructor(options: { executable?: string; baseArgs?: string[]; env?: NodeJS.ProcessEnv } = {}) {
+  /** `originCert` selects the Cloudflare account; without it cloudflared falls back to ~/.cloudflared/cert.pem. */
+  constructor(options: { executable?: string; baseArgs?: string[]; env?: NodeJS.ProcessEnv; originCert?: string } = {}) {
     this.executable = options.executable ?? 'cloudflared';
     this.baseArgs = options.baseArgs ?? [];
     this.env = options.env ?? process.env;
+    this.originCert = options.originCert;
   }
 
-  private command(args: string[], timeoutMs = 30_000) {
-    return runCommand({ executable: this.executable, args: [...this.baseArgs, ...args], env: this.env, timeoutMs });
+  private command(args: string[], timeoutMs = 30_000, extra: { env?: NodeJS.ProcessEnv; onOutput?: (chunk: string) => void } = {}) {
+    return runCommand({ executable: this.executable, args: [...this.baseArgs, ...args], env: extra.env ?? this.env, timeoutMs, onOutput: extra.onOutput });
+  }
+
+  private tunnel(args: string[], timeoutMs?: number) {
+    return this.command(['tunnel', ...(this.originCert ? ['--origincert', this.originCert] : []), ...args], timeoutMs);
   }
 
   private failure(result: { exitCode: number; stderr: string }): { ok: false; error: TunnelError } {
     const stderr = redact(result.stderr);
+    if (/origin cert(ificate)? path|locating origin cert|cert\.pem[^\n]*no such file|no such file[^\n]*cert\.pem|cannot find origin cert/i.test(result.stderr)) {
+      return { ok: false, error: tunnelError('AUTH_REQUIRED', { exitCode: result.exitCode, stderr }) };
+    }
     if (/authenticate|origin certificate/i.test(result.stderr) && /invalid|revoked|expired/i.test(result.stderr)) {
       return { ok: false, error: tunnelError('AUTH_STALE', { exitCode: result.exitCode, stderr }) };
     }
@@ -36,13 +46,18 @@ export class CloudflaredAdapter {
     return match ? { ok: true, value: { version: match[1] } } : { ok: false, error: tunnelError('CLOUDFLARED_OUTPUT_UNRECOGNIZED', { stderr: result.stdout }) };
   }
 
-  async login(): Promise<Result<{ completed: true }>> {
-    const result = await this.command(['tunnel', 'login'], 180_000);
+  /**
+   * `cloudflared tunnel login` always writes to $HOME/.cloudflared/cert.pem and has no output flag,
+   * so callers pass an isolated `home` to keep the user's existing certificate untouched.
+   */
+  async login(options: { home?: string; onOutput?: (chunk: string) => void; timeoutMs?: number } = {}): Promise<Result<{ completed: true }>> {
+    const env = options.home ? { ...this.env, HOME: options.home, USERPROFILE: options.home } : this.env;
+    const result = await this.command(['tunnel', 'login'], options.timeoutMs ?? 180_000, { env, onOutput: options.onOutput });
     return result.exitCode === 0 ? { ok: true, value: { completed: true } } : this.failure(result);
   }
 
   async listTunnels(): Promise<Result<TunnelObservation[]>> {
-    const result = await this.command(['tunnel', 'list', '--output', 'json']);
+    const result = await this.tunnel(['list', '--output', 'json']);
     if (result.exitCode !== 0) return this.failure(result);
     try {
       const rows = JSON.parse(result.stdout) as Array<{ id?: string; uuid?: string; name: string; createdAt?: string; connections?: unknown[] }>;
@@ -52,27 +67,27 @@ export class CloudflaredAdapter {
     }
   }
 
-  async createTunnel(name: string): Promise<Result<{ uuid: string; credentialsFile: string }>> {
-    const result = await this.command(['tunnel', 'create', name]);
+  async createTunnel(name: string, options: { credentialsFile?: string } = {}): Promise<Result<{ uuid: string; credentialsFile: string }>> {
+    const result = await this.tunnel(['create', ...(options.credentialsFile ? ['--credentials-file', options.credentialsFile] : []), name]);
     if (result.exitCode !== 0) return this.failure(result);
     const uuid = result.stdout.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)?.[0];
-    const credentialsFile = result.stdout.match(/(?:written to|credentials[^\n]*?)\s+([^\s]+\.json)/i)?.[1];
+    const credentialsFile = options.credentialsFile ?? result.stdout.match(/(?:written to|credentials[^\n]*?)\s+([^\s]+\.json)/i)?.[1];
     if (!uuid || !credentialsFile) return { ok: false, error: tunnelError('CLOUDFLARED_OUTPUT_UNRECOGNIZED', { stderr: result.stdout }) };
     return { ok: true, value: { uuid, credentialsFile } };
   }
 
   async validateIngress(configPath: string): Promise<Result<{ valid: true }>> {
-    const result = await this.command(['tunnel', 'ingress', 'validate', '--config', configPath]);
+    const result = await this.command(['tunnel', '--config', configPath, 'ingress', 'validate']);
     return result.exitCode === 0 ? { ok: true, value: { valid: true } } : this.failure(result);
   }
 
   async routeDns(tunnel: string, hostname: string): Promise<Result<{ hostname: string }>> {
-    const result = await this.command(['tunnel', 'route', 'dns', tunnel, hostname]);
+    const result = await this.tunnel(['route', 'dns', tunnel, hostname]);
     return result.exitCode === 0 ? { ok: true, value: { hostname } } : this.failure(result);
   }
 
   async info(tunnel: string): Promise<Result<{ connectorState: 'healthy' | 'degraded' | 'disconnected' | 'unknown' }>> {
-    const result = await this.command(['tunnel', 'info', tunnel, '--output', 'json']);
+    const result = await this.tunnel(['info', '--output', 'json', tunnel]);
     if (result.exitCode !== 0) return this.failure(result);
     try {
       const value = JSON.parse(result.stdout) as { connections?: unknown[] };
