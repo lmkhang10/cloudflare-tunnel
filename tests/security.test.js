@@ -56,3 +56,8 @@ test('saves settings through the protected API and reports daemon health', async
     assert.deepEqual(saved, [{ trayEnabled: false }]);
   });
 });
+
+test('keeps upper-case error codes readable while redacting token-like values', () => {
+  assert.equal(redact('ORIGIN_CONNECTION_REFUSED'), 'ORIGIN_CONNECTION_REFUSED');
+  assert.equal(redact('abcdEFGH1234abcdEFGH1234xyz'), '[REDACTED]');
+});

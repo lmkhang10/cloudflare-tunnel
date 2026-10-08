@@ -32,6 +32,8 @@ test('renders the English project dashboard and both guided setup choices', () =
   assert.match(html, /data-action="details"/);
   assert.match(html, /\/api\/projects\//);
   assert.match(html, /cloudflareConnector/);
+  assert.match(html, /result\.state==='failed'/, 'project actions surface workflow failures');
+  assert.match(html, /Starting…/);
 });
 
 test('creates a service-injected UI server', () => {
