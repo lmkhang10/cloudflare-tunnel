@@ -2,6 +2,7 @@ import { redact } from '../core/redact.js';
 import { tunnelError } from '../core/errors.js';
 import type { TunnelError } from '../core/types.js';
 import { runCommand } from './command-runner.js';
+import { readCredentialsTunnelId } from './origin-cert.js';
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: TunnelError };
 export interface TunnelObservation { uuid: string; name: string; createdAt?: string; connections: number; }
@@ -28,8 +29,9 @@ export class CloudflaredAdapter {
     return this.command(['tunnel', ...(this.originCert ? ['--origincert', this.originCert] : []), ...args], timeoutMs);
   }
 
-  private failure(result: { exitCode: number; stderr: string }): { ok: false; error: TunnelError } {
+  private failure(result: { exitCode: number; stderr: string }, context: { hostname?: string } = {}): { ok: false; error: TunnelError } {
     const stderr = redact(result.stderr);
+    if (/code: 1003|record with that host already exists/i.test(result.stderr)) return { ok: false, error: tunnelError('DNS_RECORD_EXISTS', { exitCode: result.exitCode, stderr, hostname: context.hostname }) };
     if (/origin cert(ificate)? path|locating origin cert|cert\.pem[^\n]*no such file|no such file[^\n]*cert\.pem|cannot find origin cert/i.test(result.stderr)) {
       return { ok: false, error: tunnelError('AUTH_REQUIRED', { exitCode: result.exitCode, stderr }) };
     }
@@ -70,8 +72,12 @@ export class CloudflaredAdapter {
   async createTunnel(name: string, options: { credentialsFile?: string } = {}): Promise<Result<{ uuid: string; credentialsFile: string }>> {
     const result = await this.tunnel(['create', ...(options.credentialsFile ? ['--credentials-file', options.credentialsFile] : []), name]);
     if (result.exitCode !== 0) return this.failure(result);
-    const uuid = result.stdout.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)?.[0];
     const credentialsFile = options.credentialsFile ?? result.stdout.match(/(?:written to|credentials[^\n]*?)\s+([^\s]+\.json)/i)?.[1];
+    // The output also prints the credentials path, which can itself contain a UUID (the account folder),
+    // so trust the credentials file first, then the "Created tunnel ... with id" line.
+    const uuid = (credentialsFile && readCredentialsTunnelId(credentialsFile))
+      ?? result.stdout.match(/created tunnel .+ with id ([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i)?.[1]
+      ?? result.stdout.match(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)?.[0];
     if (!uuid || !credentialsFile) return { ok: false, error: tunnelError('CLOUDFLARED_OUTPUT_UNRECOGNIZED', { stderr: result.stdout }) };
     return { ok: true, value: { uuid, credentialsFile } };
   }
@@ -81,9 +87,10 @@ export class CloudflaredAdapter {
     return result.exitCode === 0 ? { ok: true, value: { valid: true } } : this.failure(result);
   }
 
-  async routeDns(tunnel: string, hostname: string): Promise<Result<{ hostname: string }>> {
-    const result = await this.tunnel(['route', 'dns', tunnel, hostname]);
-    return result.exitCode === 0 ? { ok: true, value: { hostname } } : this.failure(result);
+  /** `overwrite` replaces an existing A/AAAA/CNAME record; callers only pass it after the user confirms. */
+  async routeDns(tunnel: string, hostname: string, options: { overwrite?: boolean } = {}): Promise<Result<{ hostname: string }>> {
+    const result = await this.tunnel(['route', 'dns', ...(options.overwrite ? ['--overwrite-dns'] : []), tunnel, hostname]);
+    return result.exitCode === 0 ? { ok: true, value: { hostname } } : this.failure(result, { hostname });
   }
 
   async info(tunnel: string): Promise<Result<{ connectorState: 'healthy' | 'degraded' | 'disconnected' | 'unknown' }>> {

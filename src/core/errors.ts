@@ -38,6 +38,14 @@ const definitions: Record<string, ErrorDefinition> = {
     availableActions: ['sign-in-again', 'retry', 'copy-diagnostics'],
     retryFromStep: 'authentication',
   },
+  DNS_RECORD_EXISTS: {
+    title: 'The hostname already has a DNS record',
+    summary: context => `${context.hostname ?? 'This hostname'} already has an A, AAAA, or CNAME record, often from an older tunnel.`,
+    likelyCause: 'The hostname was used before. Existing DNS records are never replaced without confirmation.',
+    remediationSteps: ['Choose "Replace DNS record" to point the hostname at this tunnel, or use another hostname.'],
+    availableActions: ['replace-dns', 'change-input', 'copy-diagnostics'],
+    retryFromStep: 'dns-route',
+  },
   CLOUDFLARED_OUTPUT_UNRECOGNIZED: {
     title: 'Cloudflare output was not recognized',
     summary: () => 'cloudflared completed, but its output did not contain expected resource information.',

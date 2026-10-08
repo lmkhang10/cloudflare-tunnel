@@ -3,16 +3,17 @@ import { mkdir, rename, stat, writeFile } from 'node:fs/promises';
 import type { Profile } from './types.js';
 import { checkOrigin, type OriginCheckResult } from './origin-check.js';
 import { validateTunnelConfig } from './validation.js';
+import { readCredentialsTunnelId } from '../providers/origin-cert.js';
 import { WorkflowRunner } from './workflow.js';
 import type { StateStore, SavedTunnel } from '../persistence/store.js';
 import type { ProcessSupervisor } from '../providers/process-supervisor.js';
 
 export interface CloudflarePort {
   version(): Promise<any>; listTunnels(): Promise<any>; createTunnel(name: string, options?: { credentialsFile?: string }): Promise<any>;
-  validateIngress(configPath: string): Promise<any>; routeDns(tunnel: string, hostname: string): Promise<any>; info(tunnel: string): Promise<any>;
+  validateIngress(configPath: string): Promise<any>; routeDns(tunnel: string, hostname: string, options?: { overwrite?: boolean }): Promise<any>; info(tunnel: string): Promise<any>;
 }
 
-type NamedInput = { projectPath: string; displayName?: string; profile: Profile; localUrl: string; tunnelName: string; hostname: string; accountId?: string };
+type NamedInput = { projectPath: string; displayName?: string; profile: Profile; localUrl: string; tunnelName: string; hostname: string; accountId?: string; replaceDns?: boolean };
 
 export class NamedTunnelWorkflow {
   private readonly store: StateStore; private readonly cloudflareFor: (accountId?: string) => CloudflarePort; private readonly supervisor: ProcessSupervisor;
@@ -35,14 +36,16 @@ export class NamedTunnelWorkflow {
   }
 
   async run(input: NamedInput): Promise<any> {
+    const validation = validateTunnelConfig({ profile: input.profile, operation: 'create', localUrl: input.localUrl, tunnelName: input.tunnelName, hostname: input.hostname, projectRoot: input.projectPath });
+    if (!validation.ok) return { state: 'failed', error: validation.issues[0], issues: validation.issues };
     const project = this.store.saveProject({ displayName: input.displayName ?? path.basename(input.projectPath), path: path.resolve(input.projectPath), profile: input.profile });
     return this.execute(project.id, input);
   }
 
-  async retry(projectId: string): Promise<any> {
+  async retry(projectId: string, options: { replaceDns?: boolean } = {}): Promise<any> {
     const project = this.store.getProject(projectId); const tunnel = this.store.getTunnelForProject(projectId);
-    if (!tunnel?.name || !tunnel.hostname || !tunnel.localUrl) throw new Error('Saved named tunnel settings are incomplete.');
-    return this.execute(projectId, { projectPath: project.path, displayName: project.displayName, profile: project.profile, localUrl: tunnel.localUrl, tunnelName: tunnel.name, hostname: tunnel.hostname, accountId: tunnel.accountId });
+    if (!tunnel?.name || !tunnel.hostname || !tunnel.localUrl) throw new Error('This custom-domain setup never finished, so there is no tunnel to start. Remove the project and create it again from New tunnel → Custom domain.');
+    return this.execute(projectId, { projectPath: project.path, displayName: project.displayName, profile: project.profile, localUrl: tunnel.localUrl, tunnelName: tunnel.name, hostname: tunnel.hostname, accountId: tunnel.accountId, replaceDns: options.replaceDns });
   }
 
   private async execute(projectId: string, input: NamedInput): Promise<any> {
@@ -79,6 +82,10 @@ export class NamedTunnelWorkflow {
       await runner.step('tunnel', async () => ({ value: { uuid: tunnel!.uuid }, effects: [`Created tunnel ${input.tunnelName} (${tunnel!.uuid}).`] }));
     }
     if (!tunnel.uuid || !tunnel.credentialsPath || !tunnel.configPath) throw new Error('Saved tunnel identity is incomplete.');
+    // Repairs ids saved by 0.2.0, which could record the account folder's UUID instead of the tunnel's.
+    const recordedId = readCredentialsTunnelId(tunnel.credentialsPath);
+    if (recordedId && recordedId !== tunnel.uuid.toLowerCase()) tunnel = this.store.saveTunnel({ ...tunnel, uuid: recordedId });
+    if (!tunnel.uuid || !tunnel.credentialsPath || !tunnel.configPath) throw new Error('Saved tunnel identity is incomplete.');
     if (tunnel.hostname !== input.hostname || tunnel.localUrl !== input.localUrl || tunnel.name !== input.tunnelName) {
       tunnel = this.store.saveTunnel({ ...tunnel, hostname: input.hostname, localUrl: input.localUrl, name: input.tunnelName });
       if (!tunnel.uuid || !tunnel.credentialsPath || !tunnel.configPath) throw new Error('Saved tunnel identity is incomplete.');
@@ -91,7 +98,7 @@ export class NamedTunnelWorkflow {
     const ingress = await cloudflare.validateIngress(tunnel.configPath);
     if (!ingress.ok) { runner.fail('ingress-validation', ingress.error); return { state: 'failed', projectId, runId: run.id, error: ingress.error }; }
     await runner.step('ingress-validation', async () => ({ value: ingress.value, effects: ['Validated ingress rules.'] }));
-    const routed = await cloudflare.routeDns(tunnel.uuid, input.hostname);
+    const routed = await cloudflare.routeDns(tunnel.uuid, input.hostname, input.replaceDns ? { overwrite: true } : undefined);
     if (!routed.ok) { runner.fail('dns-route', routed.error); return { state: 'failed', projectId, runId: run.id, error: routed.error, configPath: tunnel.configPath }; }
     await runner.step('dns-route', async () => ({ value: routed.value, effects: [`Routed ${input.hostname} to the tunnel.`] }));
     const sessionKey = `named:${tunnel.uuid}`;

@@ -13,7 +13,7 @@ const args = [];
 for (let index = 0; index < raw.length; index++) {
   const value = raw[index];
   if (['--origincert', '--protocol', '--loglevel', '--config', '--credentials-file', '--output', '--url'].includes(value)) { options[value.slice(2)] = raw[++index]; continue; }
-  if (value === '--no-autoupdate') { options['no-autoupdate'] = true; continue; }
+  if (value === '--no-autoupdate' || value === '--overwrite-dns') { options[value.slice(2)] = true; continue; }
   args.push(value);
 }
 const command = args.join(' ');
@@ -55,6 +55,9 @@ if (scenario === 'quick-running') {
   }
 } else if (args[0] === 'tunnel' && args[1] === 'ingress' && args[2] === 'validate') {
   console.log(`Validating rules from ${options.config}`);
+} else if (scenario === 'dns-exists' && args[1] === 'route' && !raw.includes('--overwrite-dns')) {
+  console.error('Failed to add route: code: 1003, reason: Failed to create record dev.example.com with err An A, AAAA, or CNAME record with that host already exists.');
+  process.exitCode = 1;
 } else if (args[0] === 'tunnel' && args[1] === 'route' && args[2] === 'dns') {
   console.log(`Added CNAME ${args[4]}`);
 } else if (args[0] === 'tunnel' && args[1] === 'info') {

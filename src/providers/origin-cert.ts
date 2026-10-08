@@ -22,6 +22,16 @@ export function readOriginCertIdentity(file: string): OriginCertIdentity {
   try { return parseOriginCert(readFileSync(file, 'utf8')); } catch { return {}; }
 }
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The tunnel id recorded by `cloudflared tunnel create` in its credentials file; the secret is not read out. */
+export function readCredentialsTunnelId(file: string): string | undefined {
+  try {
+    const value = JSON.parse(readFileSync(file, 'utf8')) as { TunnelID?: unknown };
+    return typeof value.TunnelID === 'string' && UUID.test(value.TunnelID) ? value.TunnelID.toLowerCase() : undefined;
+  } catch { return undefined; }
+}
+
 /** Tunnel credential files carry the owning account tag next to the secret; only the tag is read. */
 export function readCredentialsAccountTag(file: string): string | undefined {
   try {

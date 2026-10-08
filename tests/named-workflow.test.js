@@ -107,3 +107,26 @@ test('creates the tunnel with the selected account and keeps it on retry', async
   await workflow.stop(first.projectId);
   db.close(); await rm(h.root, { recursive: true, force: true });
 });
+
+test('does not save a project when the tunnel settings are invalid', async () => {
+  const h = await harness();
+  const result = await h.workflow.run({ ...input(h.root), tunnelName: 'Law Firm' });
+  assert.equal(result.state, 'failed');
+  assert.equal(result.error.code, 'INPUT_INVALID_TUNNEL_NAME');
+  assert.deepEqual(h.store.listProjects(), []);
+  h.db.close(); await rm(h.root, { recursive: true, force: true });
+});
+
+test('repairs a saved tunnel id that does not match its credentials file', async () => {
+  const h = await harness();
+  const first = await h.workflow.run(input(h.root));
+  await h.workflow.stop(first.projectId);
+  const saved = h.store.getTunnelForProject(first.projectId);
+  await writeFile(saved.credentialsPath, JSON.stringify({ TunnelID: '11111111-1111-4111-8111-111111111111' }));
+  h.store.saveTunnel({ ...saved, uuid: '8d390edd-11cc-42a6-9cfe-a798da649dd8' });
+  const retried = await h.workflow.retry(first.projectId);
+  assert.equal(retried.state, 'succeeded');
+  assert.equal(retried.tunnelUuid, '11111111-1111-4111-8111-111111111111');
+  await h.workflow.stop(first.projectId);
+  h.db.close(); await rm(h.root, { recursive: true, force: true });
+});

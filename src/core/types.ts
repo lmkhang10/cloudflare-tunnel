@@ -9,7 +9,7 @@ export type NamedStep =
   | 'cloudflare-health' | 'public-health';
 export type RecoveryAction =
   | 'retry' | 'sign-in-again' | 'change-input' | 'open-dashboard'
-  | 'copy-diagnostics' | 'stop' | 'force-stop';
+  | 'copy-diagnostics' | 'stop' | 'force-stop' | 'replace-dns';
 
 export interface TunnelError {
   code: string;

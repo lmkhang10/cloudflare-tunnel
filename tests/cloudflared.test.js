@@ -68,3 +68,25 @@ test('classifies a missing certificate as AUTH_REQUIRED', async () => {
   assert.equal(result.error.code, 'AUTH_REQUIRED');
   await h.dispose();
 });
+
+test('reads the tunnel id from the credentials file even when the path contains another UUID', async () => {
+  const h = await harness('create-success');
+  const root = await mkdtemp(path.join(tmpdir(), 'cf-adapter-uuid-'));
+  const accountFolder = path.join(root, 'accounts', '8d390edd-11cc-42a6-9cfe-a798da649dd8', 'tunnels');
+  const adapter = new CloudflaredAdapter({ executable: process.execPath, baseArgs: [fixture], originCert: '/c.pem', env: { ...process.env, FAKE_CLOUDFLARED_RECORD: h.record } });
+  const created = await adapter.createTunnel('lfms', { credentialsFile: path.join(accountFolder, 'lfms.json') });
+  assert.equal(created.value.uuid, '11111111-1111-4111-8111-111111111111');
+  await rm(root, { recursive: true, force: true }); await h.dispose();
+});
+
+test('reports an existing DNS record and overwrites it only when asked', async () => {
+  const h = await harness('dns-exists');
+  const refused = await h.adapter.routeDns('11111111-1111-4111-8111-111111111111', 'dev.example.com');
+  assert.equal(refused.error.code, 'DNS_RECORD_EXISTS');
+  assert.ok(refused.error.availableActions.includes('replace-dns'));
+  const replaced = await h.adapter.routeDns('11111111-1111-4111-8111-111111111111', 'dev.example.com', { overwrite: true });
+  assert.equal(replaced.ok, true);
+  const calls = (await readFile(h.record, 'utf8')).trim().split('\n').map(JSON.parse);
+  assert.deepEqual(calls[1], ['tunnel', 'route', 'dns', '--overwrite-dns', '11111111-1111-4111-8111-111111111111', 'dev.example.com']);
+  await h.dispose();
+});
