@@ -6,6 +6,18 @@ An open-source toolkit for creating and integrating Cloudflare Tunnels through t
 
 ## Current version
 
+`0.2.2` fixes and polish on top of 0.2.0:
+
+- macOS app in `~/Applications/Cloudflare Tunnel Kit.app` with its own name and icon, so it can be kept in the Dock; clicking it starts the background service and opens the window.
+- New logo in the dashboard, window, and Dock.
+- Custom-domain setups validate the tunnel name, hostname, and URL before the review step, suggest a tunnel name from the project name, and never leave a half-created project behind.
+- Fixed: tunnels created under a Cloudflare account could save the account folder's id instead of the tunnel id ("Tunnel not found"); Retry repairs affected projects.
+- A hostname that already has a DNS record now shows **Replace DNS record** (with confirmation) instead of a generic failure; CLI: `cftunnel retry --project <id> --replace-dns`.
+- `cftunnel daemon restart` brings back the tunnels that were running; restored tunnels start in parallel and show **Starting…**.
+- The dashboard updates only the rows that changed (no flicker), refreshes when the window is shown again, and **System check** shows a summary with links to fix what is missing.
+- Failed starts explain why on the project row; error codes are no longer redacted in history.
+- Only one menu bar icon, even when the app and the service start together.
+
 `0.2.0` adds:
 
 - `cftunnel` with no arguments asks whether to open the menu bar app, the browser dashboard, or the terminal wizard.
@@ -168,6 +180,8 @@ cftunnel daemon status      # running?, URL, pid, log folder
 cftunnel daemon stop        # stops the service and every running tunnel
 cftunnel ui --foreground    # the old behaviour: UI tied to this terminal
 ```
+
+On macOS, `cftunnel tray` also creates `~/Applications/Cloudflare Tunnel Kit.app` with its own name and icon. Open it from Launchpad or Spotlight, then right-click its Dock icon → Options → **Keep in Dock**. Clicking it starts the background service if needed and opens the window. The app is a local, ad-hoc-signed clone of the downloaded Electron runtime; `cftunnel tray --reinstall-app` rebuilds it, and `cftunnel tray` refreshes it automatically after an update.
 
 The menu bar icon (filled when tunnels are running) lists every project with Start/Stop/Restart, Copy/Open public URL, Start all/Stop all, Launch at login, update status, and two quit options: quit only the menu bar app (tunnels keep running) or quit and stop all tunnels. Closing the window hides it. The tray never opens the database; it uses the service's loopback API.
 
