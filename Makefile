@@ -9,14 +9,17 @@ HOSTNAME ?=
 PROJECT ?=
 BUMP ?= patch
 
-.PHONY: help setup global build test init doctor ui quick create start stop status npm-login publish-check publish release
+.PHONY: help setup global build test init doctor ui tray daemon daemon-stop autostart quick create start stop status npm-login publish-check publish release
 
 help: ## Xem các lệnh
 	@printf "Cloudflare Tunnel Kit\n\n"
 	@printf "  make setup              Cài dependency và build\n"
 	@printf "  make global             Cài CLI global (cf-tunnel và cftunnel)\n"
 	@printf "  make init               Wizard text-only\n"
-	@printf "  make ui                 Mở live UI local\n"
+	@printf "  make ui                 Mở live UI (chạy ngầm qua background service)\n"
+	@printf "  make tray               Cài/chạy app menu bar (Electron)\n"
+	@printf "  make daemon             Bật background service (daemon-stop để tắt)\n"
+	@printf "  make autostart          Bật chạy cùng hệ thống (macOS launchd)\n"
 	@printf "  make quick URL=...      Preview quick tunnel\n"
 	@printf "  make create NAME=...    Preview named tunnel\n"
 	@printf "  make doctor             Kiểm tra môi trường\n"
@@ -50,6 +53,18 @@ doctor: build ## Kiểm tra môi trường
 
 ui: build ## Chạy live UI trên localhost
 	$(CLI) ui
+
+tray: build ## Cài/chạy app menu bar
+	$(CLI) tray
+
+daemon: build ## Bật background service
+	$(CLI) daemon start
+
+daemon-stop: build ## Tắt background service và mọi tunnel
+	$(CLI) daemon stop
+
+autostart: build ## Bật chạy cùng hệ thống (macOS)
+	$(CLI) autostart enable
 
 quick: build ## Preview quick tunnel
 	$(CLI) quick --url "$(URL)" --dry-run

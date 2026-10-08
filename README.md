@@ -1,12 +1,30 @@
 # cloudflare-tunnel-kit
 
-An open-source toolkit for creating and integrating Cloudflare Tunnels through two simple interfaces: a command-line wizard and a local live UI. It replaces scattered shell scripts and Makefile targets with a validated, reviewable, and confirmation-based workflow.
+An open-source toolkit for creating and integrating Cloudflare Tunnels through three interfaces: a menu bar app with a native window, a local dashboard in the browser, and a command-line wizard. Tunnels run in a background service, so they keep running after the terminal closes. It replaces scattered shell scripts and Makefile targets with a validated, reviewable, and confirmation-based workflow.
 
 ![Demo](images/demo.png)
 
 ## Current version
 
-`0.1.8` is the current MVP and includes:
+`0.2.0` adds:
+
+- `cftunnel` with no arguments asks whether to open the menu bar app, the browser dashboard, or the terminal wizard.
+- A background service that owns every connector, restores auto-start projects, and restarts crashed connectors with backoff.
+- A menu bar app (Electron, downloaded on first use) with per-project controls, notifications, and a native settings window.
+- Launch at login on macOS (launchd), with stale-path detection and repair.
+- Multiple Cloudflare accounts: import existing `~/.cloudflared/cert.pem*` files or sign in without replacing `~/.cloudflared/cert.pem`; each project uses its own account.
+- A Settings panel and `cftunnel settings` for tray, port, restart, cloudflared, notification, and update options.
+- Update checks for cftunnel and cloudflared, with one-click install and service restart for global npm installs.
+- Fixed: ingress validation now actually runs (`cloudflared tunnel --config <file> ingress validate`); every UI route rejects non-loopback Host headers.
+
+Behavior changes from 0.1.x:
+
+- `cftunnel ui` starts the background service and returns; use `cftunnel ui --foreground` for the previous terminal-bound UI.
+- `cftunnel` with no arguments shows the launcher; `cftunnel init` opens the terminal wizard directly.
+- A custom-domain setup no longer runs `cloudflared tunnel login` on its own; connect accounts with `cftunnel account` or Settings → Accounts.
+- The local database is migrated to schema version 2 on first start; a `state.db.pre-migration-backup` copy is kept.
+
+Also included since 0.1.x:
 
 - A reusable TypeScript API for validation, plan generation, execution, and redaction.
 - The `cf-tunnel` CLI with `init`, `create`, `quick`, `start`, `stop`, `status`, `doctor`, and `ui` commands.
@@ -32,8 +50,10 @@ The toolkit does not concatenate user input into shell commands, print secrets t
 ## Requirements
 
 - Node.js 20 or newer.
-- `cloudflared` available in `PATH` when starting a real tunnel.
+- `cloudflared` available in `PATH` (or set `cloudflaredPath`) when starting a real tunnel.
 - Appropriate Cloudflare permissions for named tunnels.
+- Optional: about 100 MB of disk for the menu bar app's Electron runtime, installed on first `cftunnel tray`.
+- Launch at login currently requires macOS.
 
 ## Installation
 
@@ -86,7 +106,15 @@ Check the local environment:
 npx cf-tunnel doctor
 ```
 
-Run `npx cf-tunnel` without options to start the interactive text-only wizard. It asks for each value, validates before execution, prints a command preview, and asks for confirmation.
+Run `cftunnel` without options to choose how to open the toolkit:
+
+```text
+  1. Open the app (menu bar icon + window)
+  2. Open the dashboard in your browser
+  3. Use the terminal wizard
+```
+
+Press Enter for the app. Every choice starts the background service if it is not running yet. `cftunnel init` goes straight to the terminal wizard, which asks for each value, validates before execution, prints a command preview, and asks for confirmation.
 
 Preview a Quick Tunnel without starting `cloudflared`:
 
@@ -104,13 +132,16 @@ npx cf-tunnel create \
   --dry-run
 ```
 
-Lifecycle commands:
+Lifecycle commands take the project id shown by `status`, the dashboard, or the wizard's saved-project list:
 
 ```text
-npx cf-tunnel start --name my-project
-npx cf-tunnel stop --name my-project
-npx cf-tunnel status --name my-project
+npx cf-tunnel start --project <id>
+npx cf-tunnel stop --project <id>
+npx cf-tunnel restart --project <id>
+npx cf-tunnel status --project <id>
 ```
+
+These are sent to the background service when it is running, so the connector does not stop when the command exits.
 
 `--yes` does not bypass validation or Laravel `.env` confirmation.
 
@@ -122,9 +153,69 @@ Start the local UI:
 npx cf-tunnel ui
 ```
 
-The command prints startup progress, chooses an available loopback port, and opens the browser automatically. If the browser cannot be opened, copy the printed `http://127.0.0.1:<port>` URL. Use `npx cf-tunnel ui --no-open` when you only want the URL. To use a fixed port, pass `--port 8787`; when omitted, `CLOUDFLARE_TUNNEL_KIT_UI_PORT` is used if set, otherwise an available port is selected. Ports are always bound to `127.0.0.1`.
+The command starts the background service if needed, then opens the menu bar app's window when the desktop runtime is installed, or the browser otherwise (`--browser` forces the browser). If the browser cannot be opened, copy the printed `http://127.0.0.1:<port>` URL. Use `npx cf-tunnel ui --no-open` when you only want the URL. To use a fixed port, pass `--port 8787` when the service starts; when omitted, `CLOUDFLARE_TUNNEL_KIT_UI_PORT`, then the `uiPort` setting is used, otherwise an available port is selected. Ports are always bound to `127.0.0.1`.
 
 The UI binds to loopback by default and does not send the copied prompt anywhere.
+
+## Background service and menu bar app
+
+`cftunnel ui` starts a background service and returns. Tunnels keep running after the terminal closes; the dashboard talks to that service.
+
+```bash
+cftunnel ui                 # start the service if needed, open the window (or browser)
+cftunnel tray               # first run downloads the Electron runtime (~100 MB) into the app data folder
+cftunnel daemon status      # running?, URL, pid, log folder
+cftunnel daemon stop        # stops the service and every running tunnel
+cftunnel ui --foreground    # the old behaviour: UI tied to this terminal
+```
+
+The menu bar icon (filled when tunnels are running) lists every project with Start/Stop/Restart, Copy/Open public URL, Start all/Stop all, Launch at login, update status, and two quit options: quit only the menu bar app (tunnels keep running) or quit and stop all tunnels. Closing the window hides it. The tray never opens the database; it uses the service's loopback API.
+
+Lifecycle commands (`start`, `stop`, `restart`, `status`, `create --yes`, `quick --yes`) are sent to the running service, so connectors are not tied to your shell.
+
+Crashed connectors restart automatically after 5s, 15s, 60s, 2m, then 5m, up to `maxRestartAttempts`. A desktop notification is shown when a connector drops or a Quick Tunnel gets a new URL.
+
+## Launch at login (macOS)
+
+```bash
+cftunnel autostart enable   # writes ~/Library/LaunchAgents/vn.cftunnel.daemon.plist and loads it
+cftunnel autostart status   # reports "stale" if the recorded node/cftunnel path no longer exists
+cftunnel autostart disable
+```
+
+The agent records absolute paths to the current `node` and `cftunnel`, and a PATH that includes the folder containing `cloudflared` plus `/opt/homebrew/bin` and `/usr/local/bin`. After switching Node versions with nvm/fnm, run `cftunnel autostart enable` again (or press **Repair** in Settings). Projects with **Start with the service** turned on are started when the service launches. Windows and Linux are not supported yet.
+
+## Cloudflare accounts
+
+Each Cloudflare account is one origin certificate stored in the app data folder (`accounts/<id>/cert.pem`, mode 600). Every Cloudflare command runs with `--origincert` for the project's account, and new tunnel credentials are stored next to that certificate.
+
+```bash
+cftunnel account discover            # lists ~/.cloudflared/cert.pem* (for example cert.pem.work)
+cftunnel account import --all        # copies them; the originals are not changed
+cftunnel account login --label work  # signs in with an isolated HOME, so ~/.cloudflared/cert.pem is never replaced
+cftunnel account list
+cftunnel account default <id>
+cftunnel create --account <id> --url http://127.0.0.1:8000 --name shop --hostname shop.example.com --yes
+```
+
+A tunnel lives in one account. Changing a project's account in the dashboard creates a new tunnel and DNS route in the new account the next time it starts, after a confirmation. Tunnels created before multi-account support are linked to an imported account automatically using the `AccountTag` in their credentials file; otherwise they keep using `~/.cloudflared/cert.pem`.
+
+A custom-domain setup no longer signs in to Cloudflare on its own. If the account is missing or expired, it stops with `AUTH_REQUIRED`/`AUTH_STALE` and the dashboard offers **Sign in again** for that account.
+
+## Settings
+
+Open **Settings** in the dashboard or use `cftunnel settings get` / `cftunnel settings set KEY VALUE`. Available keys: `trayEnabled`, `openWindowOnLaunch`, `showDockIcon`, `uiPort`, `restoreTunnelsOnLaunch`, `autoRestartOnCrash`, `maxRestartAttempts`, `cloudflaredPath`, `protocol` (`auto|quic|http2`), `noAutoupdate`, `logLevel`, `notifyOnDisconnect`, `notifyOnQuickUrl`, `checkForUpdates`, `autoInstallUpdates`, `updateCheckIntervalHours`, `defaultAccountId`.
+
+## Updates
+
+The background service checks the public npm registry and the cloudflared GitHub releases once a day (`checkForUpdates`, opt-out). Nothing about your machine is sent.
+
+```bash
+cftunnel update --check
+cftunnel update             # global installs only: installs, verifies `cftunnel --version`, then restarts the service
+```
+
+For a global install, **Install update and restart** in the menu bar or Settings installs the new version, checks that the new CLI runs, then restarts the service and resumes the tunnels that were running (a few seconds of downtime). If any step fails, the running service is left untouched. Set `autoInstallUpdates` to do this without asking. Project-local installs only show the command to run. cloudflared is never updated automatically; when a newer release exists the dashboard shows `brew upgrade cloudflared` (Homebrew) or the download link.
 
 ## Custom profile
 
@@ -194,13 +285,14 @@ Review the redacted prompt before pasting it into an external AI service.
 
 ## Security model
 
-- The UI binds to `127.0.0.1` by default.
+- The UI binds to `127.0.0.1` by default, and every request must carry a `127.0.0.1`/`localhost` Host header (DNS-rebinding protection for the long-running service).
+- The service writes `daemon.json` (port and session token, mode 600) in the app data folder for the CLI and tray.
 - Child processes use argv arrays with shell execution disabled.
 - Secret-looking keys/values, bearer tokens, and credential paths are redacted.
 - File paths are checked against the project root.
 - Dry-run does not start `cloudflared`.
 - Configuration overwrite and Laravel `.env` changes require a visible plan and confirmation.
-- No telemetry or diagnostics are sent externally.
+- No telemetry or diagnostics are sent externally. The only outbound requests are the optional update checks described above.
 
 This toolkit does not replace review of Cloudflare account permissions, DNS, access policies, or organizational secret management.
 
