@@ -1,6 +1,6 @@
 // Electron main process for the menu bar app. It never opens the database: every action goes
 // through the background daemon's loopback API, so the native better-sqlite3 build is not needed here.
-import { app, BrowserWindow, Menu, Notification, Tray, clipboard, dialog, nativeImage, shell, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, Menu, Notification, Tray, clipboard, dialog, nativeImage, nativeTheme, shell, type MenuItemConstructorOptions } from 'electron';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { findDaemon, type DaemonInfo } from '../daemon/lock.js';
@@ -54,7 +54,7 @@ async function openWindow(tab?: string): Promise<void> {
   if (!daemon && !await ensureDaemon()) { dialog.showErrorBox('Cloudflare Tunnel Kit', 'The background service could not be started. Run `cftunnel daemon start` in a terminal for details.'); return; }
   const url = `${daemon!.url}/?shell=desktop${tab ? `&settings=${encodeURIComponent(tab)}` : ''}`;
   if (!mainWindow || mainWindow.isDestroyed()) {
-    mainWindow = new BrowserWindow({ width: 1120, height: 780, minWidth: 420, minHeight: 520, title: 'Cloudflare Tunnel Kit', show: false, backgroundColor: '#f4f6fa', webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false } });
+    mainWindow = new BrowserWindow({ width: 1120, height: 780, minWidth: 420, minHeight: 520, title: 'Cloudflare Tunnel Kit', show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1014' : '#f5f6f8', webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false } });
     mainWindow.on('close', event => { if (!quitting) { event.preventDefault(); mainWindow?.hide(); } });
     mainWindow.once('ready-to-show', () => mainWindow?.show());
     const external = (target: string) => { try { const parsed = new URL(target); if (['http:', 'https:'].includes(parsed.protocol)) void shell.openExternal(target); } catch {} };

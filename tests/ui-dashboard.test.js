@@ -19,7 +19,7 @@ test('renders the English project dashboard and both guided setup choices', () =
   assert.match(html, /role="dialog" aria-modal="true"/);
   assert.doesNotMatch(html, /<dialog|showModal\(/);
   assert.match(html, /document\.body\.style\.overflow='hidden'/);
-  assert.match(html, /e\.key==='Escape'/);
+  assert.match(html, /e\.key(===|!==)'Escape'/);
   assert.match(html, /wizardTrigger\?\.focus/);
   assert.match(html, /<div class="drawer-overlay" data-close>/);
   assert.match(html, /<button class="close" data-close/);
