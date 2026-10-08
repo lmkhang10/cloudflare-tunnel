@@ -56,7 +56,8 @@ async function confirm(question: string): Promise<boolean> {
 const localService = () => createTunnelKitService({ dataDir, version: packageVersion, runtime: { nodePath, cliPath, env: process.env.CLOUDFLARE_TUNNEL_KIT_DATA_DIR ? { CLOUDFLARE_TUNNEL_KIT_DATA_DIR: dataDir } : undefined } });
 
 /** Connects to the background service, starting it (through launchd when registered) if needed. */
-async function ensureDaemon(): Promise<DaemonClient> {
+/** `tray: false` when this command opens the tray itself, so the service does not open a second one. */
+async function ensureDaemon(options: { tray?: boolean } = {}): Promise<DaemonClient> {
   const running = await connectDaemon(dataDir); if (running) return running;
   console.log('Starting the Cloudflare Tunnel Kit background service...');
   const port = resolveUiPort();
@@ -64,7 +65,7 @@ async function ensureDaemon(): Promise<DaemonClient> {
   if (port === undefined && (await autostart.status()).enabled && await autostart.kickstart()) {
     for (let attempt = 0; attempt < 75; attempt++) { const client = await connectDaemon(dataDir); if (client) return client; await new Promise(resolve => setTimeout(resolve, 200)); }
   }
-  return spawnDaemon({ nodePath, cliPath, dataDir, args: port === undefined ? [] : ['--port', String(port)] });
+  return spawnDaemon({ nodePath, cliPath, dataDir, args: [...(port === undefined ? [] : ['--port', String(port)]), ...(options.tray === false ? ['--no-tray'] : [])] });
 }
 
 async function startForegroundUi() {
@@ -80,9 +81,9 @@ async function startForegroundUi() {
 async function openUi(options: { browser?: boolean } = {}) {
   if (flag('--foreground')) return startForegroundUi();
   const browser = options.browser ?? flag('--browser');
-  const client = await ensureDaemon();
-  console.log(`Cloudflare Tunnel Kit v${client.info.version} running in the background at ${client.info.url}`);
   const runtime = runtimeStatus(paths.runtimeDir);
+  const client = await ensureDaemon({ tray: browser || flag('--no-open') || !runtime.installed });
+  console.log(`Cloudflare Tunnel Kit v${client.info.version} running in the background at ${client.info.url}`);
   if (!browser && !flag('--no-open') && runtime.installed && runtime.binary) {
     launchTray({ binary: runtime.binary, dataDir, nodePath, cliPath, openWindow: true });
     console.log('Opened the Cloudflare Tunnel Kit window. Use the menu bar icon to reopen it.');
@@ -100,7 +101,7 @@ async function tray() {
     if (!await confirm('Download and install it now?')) { console.log('Cancelled. `cftunnel ui --browser` opens the dashboard in your browser instead.'); return; }
     runtime = await installRuntime({ runtimeDir: paths.runtimeDir, nodePath });
   }
-  await ensureDaemon();
+  await ensureDaemon({ tray: false });
   const delay = Number(value('--delay') ?? 0); if (delay > 0) await new Promise(resolve => setTimeout(resolve, Math.min(delay, 30_000)));
   launchTray({ binary: runtime.binary!, dataDir, nodePath, cliPath, openWindow: !flag('--background') });
   console.log('Cloudflare Tunnel Kit is in the menu bar. Closing the window keeps tunnels running.');

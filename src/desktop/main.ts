@@ -2,6 +2,7 @@
 // through the background daemon's loopback API, so the native better-sqlite3 build is not needed here.
 import { app, BrowserWindow, Menu, Notification, Tray, clipboard, dialog, nativeImage, shell, type MenuItemConstructorOptions } from 'electron';
 import { spawn } from 'node:child_process';
+import path from 'node:path';
 import { findDaemon, type DaemonInfo } from '../daemon/lock.js';
 import { cloudIconPng } from './icon.js';
 
@@ -161,7 +162,11 @@ function renderMenu(): void {
   tray.setContextMenu(Menu.buildFromTemplate(template));
 }
 
-if (!app.requestSingleInstanceLock()) app.quit();
+// A dedicated profile keeps the single-instance lock away from ~/Library/Application Support/Electron,
+// which every unpackaged Electron app on the machine shares.
+if (dataDir) app.setPath('userData', path.join(dataDir, 'desktop-profile'));
+// app.quit() is ignored before "ready"; exit so a second launch never shows a second icon.
+if (!app.requestSingleInstanceLock()) app.exit(0);
 else {
   app.setName('Cloudflare Tunnel Kit');
   app.on('second-instance', (_event, argv) => { if (argv.includes('--open-window')) void openWindow(); });
