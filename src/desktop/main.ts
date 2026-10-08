@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { findDaemon, type DaemonInfo } from '../daemon/lock.js';
 import { cloudIconPng } from './icon.js';
+import { logoPath } from './bundle.js';
 
 const dataDir = process.env.CLOUDFLARE_TUNNEL_KIT_DATA_DIR ?? '';
 const nodePath = process.env.CFTUNNEL_NODE ?? 'node';
@@ -45,17 +46,20 @@ async function ensureDaemon(): Promise<DaemonInfo | undefined> {
   return daemon;
 }
 
+/** The Dock icon shows while the window is open (so it can be Cmd-Tabbed) or always when the setting is on. */
 function syncDock(): void {
   if (process.platform !== 'darwin' || !app.dock) return;
-  if (snapshot.settings.showDockIcon) void app.dock.show(); else app.dock.hide();
+  const windowVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
+  if (snapshot.settings.showDockIcon || windowVisible) void app.dock.show(); else app.dock.hide();
 }
 
 async function openWindow(tab?: string): Promise<void> {
   if (!daemon && !await ensureDaemon()) { dialog.showErrorBox('Cloudflare Tunnel Kit', 'The background service could not be started. Run `cftunnel daemon start` in a terminal for details.'); return; }
   const url = `${daemon!.url}/?shell=desktop${tab ? `&settings=${encodeURIComponent(tab)}` : ''}`;
   if (!mainWindow || mainWindow.isDestroyed()) {
-    mainWindow = new BrowserWindow({ width: 1120, height: 780, minWidth: 420, minHeight: 520, title: 'Cloudflare Tunnel Kit', show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1014' : '#f5f6f8', webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false } });
+    mainWindow = new BrowserWindow({ icon: logoPath(), width: 1120, height: 780, minWidth: 420, minHeight: 520, title: 'Cloudflare Tunnel Kit', show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#0e1014' : '#f5f6f8', webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false } });
     mainWindow.on('close', event => { if (!quitting) { event.preventDefault(); mainWindow?.hide(); } });
+    mainWindow.on('show', syncDock); mainWindow.on('hide', syncDock);
     mainWindow.once('ready-to-show', () => mainWindow?.show());
     const external = (target: string) => { try { const parsed = new URL(target); if (['http:', 'https:'].includes(parsed.protocol)) void shell.openExternal(target); } catch {} };
     mainWindow.webContents.setWindowOpenHandler(({ url: target }) => { external(target); return { action: 'deny' }; });
@@ -91,6 +95,8 @@ async function refresh(): Promise<void> {
       const health = await api('GET', '/api/health');
       firstVersion ??= health.version;
       if (health.version !== firstVersion) return relaunchForNewVersion();
+      // The service may come back on another port; keep an open window pointed at the live one.
+      if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.getURL().startsWith(daemon.url)) void mainWindow.loadURL(`${daemon.url}/?shell=desktop`);
       const [projects, settings, autostart, updates, events] = await Promise.all([
         api('GET', '/api/projects'), api('GET', '/api/settings'), api('GET', '/api/autostart').catch(() => ({})), api('GET', '/api/updates').catch(() => ({})), api('GET', `/api/events?after=${lastEventId ?? 0}`).catch(() => ({ events: [], lastId: lastEventId ?? 0 })),
       ]);
@@ -117,12 +123,14 @@ function renderMenu(): void {
     const isRunning = item.status === 'Running';
     const target = item.publicUrl as string | undefined;
     return {
-      label: `${isRunning ? '●' : '○'}  ${item.displayName}`,
+      label: `${isRunning ? '●' : item.status === 'Starting' ? '◐' : '○'}  ${item.displayName}`,
       submenu: [
         { label: target ?? item.hostname ?? (item.kind === 'named' ? 'Custom domain' : 'Quick Tunnel'), enabled: false },
         { label: `${item.status}${item.accountLabel ? ` · ${item.accountLabel}` : ''}`, enabled: false },
         { type: 'separator' },
-        ...(isRunning
+        ...(item.status === 'Starting'
+          ? [{ label: 'Starting…', enabled: false }]
+          : isRunning
           ? [{ label: 'Stop', click: () => act(`Stop ${item.displayName}`, () => api('POST', `/api/projects/${encodeURIComponent(item.id)}/stop`)) }, { label: 'Restart', click: () => act(`Restart ${item.displayName}`, () => api('POST', `/api/projects/${encodeURIComponent(item.id)}/restart`)) }]
           : [{ label: 'Start', click: () => act(`Start ${item.displayName}`, async () => { const result = await api('POST', `/api/projects/${encodeURIComponent(item.id)}/start`); if (result?.state === 'failed') throw new Error(result.error?.summary ?? result.error?.reason ?? 'The tunnel could not start.'); }) }]) as MenuItemConstructorOptions[],
         { type: 'separator' },
@@ -175,12 +183,13 @@ else {
   app.on('activate', () => void openWindow());
   app.on('before-quit', () => { quitting = true; });
   app.whenReady().then(async () => {
-    if (process.platform === 'darwin') app.dock?.hide();
+    if (process.platform === 'darwin') { app.dock?.setIcon(logoPath()); app.dock?.hide(); }
     tray = new Tray(icons.idle);
     tray.setToolTip('Cloudflare Tunnel Kit');
     await ensureDaemon();
     await refresh();
     setInterval(() => void refresh(), REFRESH_MS);
-    if (process.argv.includes('--open-window') || snapshot.settings.openWindowOnLaunch) await openWindow();
+    // Launched from the Dock, Finder, or Spotlight there are no flags: show the window. The service starts the tray with --background.
+    if (!process.argv.includes('--background') || snapshot.settings.openWindowOnLaunch) await openWindow();
   });
 }

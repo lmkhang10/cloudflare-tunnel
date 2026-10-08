@@ -1,5 +1,6 @@
 import { createServer as httpServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import crypto from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { dashboardPage } from './page.js';
 
 const emptyService = {
@@ -10,9 +11,14 @@ const emptyService = {
 };
 
 /** Hooks only the background daemon provides; the foreground `ui --foreground` server omits them. */
-export interface DaemonControls { pid: number; startedAt: string; shutdown(): Promise<unknown>; installUpdate(): Promise<unknown>; }
+export interface DaemonControls { pid: number; startedAt: string; shutdown(options?: { resume?: boolean }): Promise<unknown>; installUpdate(): Promise<unknown>; }
 
 const LOOPBACK_HOST = /^(127\.0\.0\.1|localhost)(:\d+)?$/i;
+const images = new Map<string, Buffer | null>();
+function image(name: 'logo.png' | 'favicon.png'): Buffer | null {
+  if (!images.has(name)) { try { images.set(name, readFileSync(new URL(`../../assets/${name}`, import.meta.url))); } catch { images.set(name, null); } }
+  return images.get(name)!;
+}
 
 export function createServer(options: { service?: any; sessionToken?: string; maxBodyBytes?: number; version?: string; daemon?: DaemonControls } = {}): Server {
   const service = options.service ?? emptyService; const token = options.sessionToken ?? crypto.randomUUID(); const maxBodyBytes = options.maxBodyBytes ?? 64 * 1024;
@@ -25,6 +31,11 @@ export function createServer(options: { service?: any; sessionToken?: string; ma
     const id = (value: string) => decodeURIComponent(value);
     if (req.method === 'GET') {
       if (url.pathname === '/') return html(res, dashboardPage(options.version, { shell: url.searchParams.get('shell') === 'desktop' ? 'desktop' : 'browser', daemon: Boolean(options.daemon) }));
+      if (url.pathname === '/logo.png' || url.pathname === '/favicon.png') {
+        const body = image(url.pathname.slice(1) as 'logo.png' | 'favicon.png');
+        if (!body) return json(res, { error: 'Not found.' }, 404);
+        res.setHeader('Content-Type', 'image/png'); res.setHeader('Cache-Control', 'public, max-age=86400'); res.end(body); return;
+      }
       if (url.pathname === '/api/health') return json(res, { ok: true, version: options.version, pid: options.daemon?.pid ?? process.pid, startedAt: options.daemon?.startedAt, daemon: Boolean(options.daemon) });
       if (url.pathname === '/api/session') return json(res, { confirmationToken: token });
       if (url.pathname === '/api/projects') return handle(res, async () => ({ projects: await service.listProjects() }));
@@ -56,14 +67,14 @@ export function createServer(options: { service?: any; sessionToken?: string; ma
       if (url.pathname === '/api/accounts/login') return handle(res, async () => call('startAccountLogin', body));
       if (url.pathname === '/api/updates/check') return handle(res, () => call('checkForUpdates'));
       if (url.pathname === '/api/updates/install') return handle(res, () => options.daemon ? options.daemon.installUpdate() : Promise.reject(new Error('Updates are installed by the background service. Run `cftunnel update`.')));
-      if (url.pathname === '/api/daemon/shutdown') return handle(res, () => options.daemon ? options.daemon.shutdown() : Promise.reject(new Error('This UI is not running as the background service.')));
+      if (url.pathname === '/api/daemon/shutdown') return handle(res, () => options.daemon ? options.daemon.shutdown({ resume: body.resume === true }) : Promise.reject(new Error('This UI is not running as the background service.')));
       const account = url.pathname.match(/^\/api\/accounts\/([^/]+)\/(verify|rename|remove|default)$/);
       if (account) {
         const accountId = id(account[1]);
         return handle(res, async () => account[2] === 'verify' ? call('verifyAccount', accountId) : account[2] === 'rename' ? call('renameAccount', accountId, body.label) : account[2] === 'default' ? call('setDefaultAccount', accountId) : (call('removeAccount', accountId), { removed: true }));
       }
-      const action = url.pathname.match(/^\/api\/projects\/([^/]+)\/(start|stop|retry|restart)$/);
-      if (action) return handle(res, () => service[action[2]](id(action[1])));
+      const action = url.pathname.match(/^\/api\/projects\/([^/]+)\/(start|stop|retry|restart|replace-dns)$/);
+      if (action) return handle(res, () => action[2] === 'replace-dns' ? call('replaceDns', id(action[1])) : service[action[2]](id(action[1])));
       const management = url.pathname.match(/^\/api\/projects\/([^/]+)\/(relink|remove-local|settings)$/);
       if (management) return handle(res, () => management[2] === 'relink' ? service.relinkProject(id(management[1]), body.path) : management[2] === 'settings' ? call('updateProjectSettings', id(management[1]), body) : service.removeLocal(id(management[1])));
       if (url.pathname === '/api/plan') {
@@ -86,7 +97,7 @@ function validMutationRequest(req: IncomingMessage, token: string): boolean {
   const origin = String(req.headers.origin ?? ''); return !origin || /^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/i.test(origin);
 }
 function readBody(req: IncomingMessage, limit: number): Promise<string> { return new Promise((resolve, reject) => { let data = '', size = 0; req.on('data', chunk => { size += chunk.length; if (size > limit) { const error: any = new Error('Request body is too large.'); error.code = 'BODY_TOO_LARGE'; reject(error); req.destroy(); return; } data += chunk; }); req.on('end', () => resolve(data || '{}')); req.on('error', reject); }); }
-async function handle(res: ServerResponse, operation: () => Promise<any>) { try { return json(res, (await operation()) ?? {}); } catch (error) { return json(res, { error: error instanceof Error ? error.message : String(error) }, 400); } }
+async function handle(res: ServerResponse, operation: () => Promise<any>) { try { return json(res, (await operation()) ?? {}); } catch (error) { return json(res, { error: error instanceof Error ? error.message : String(error), issues: (error as any)?.issues }, 400); } }
 function secureHeaders(res: ServerResponse) { res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Content-Security-Policy', "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; frame-ancestors 'none'"); res.setHeader('X-Frame-Options', 'DENY'); res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()'); res.setHeader('Referrer-Policy', 'no-referrer'); res.setHeader('Cache-Control', 'no-store'); }
 function html(res: ServerResponse, value: string) { res.statusCode = 200; res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(value); }
 function json(res: ServerResponse, value: unknown, status = 200) { res.statusCode = status; res.setHeader('Content-Type', 'application/json; charset=utf-8'); res.end(JSON.stringify(value)); }

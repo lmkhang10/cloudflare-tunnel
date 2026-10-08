@@ -11,6 +11,7 @@ import { chooseLauncher, runWizard } from './wizard.js';
 import { connectDaemon, remoteService, spawnDaemon, type DaemonClient } from '../daemon/client.js';
 import { pidAlive } from '../daemon/lock.js';
 import { installRuntime, launchTray, runtimeStatus, ELECTRON_VERSION } from '../desktop/runtime.js';
+import { appBundleBinary, appBundlePath, bundleIsCurrent, installAppBundle } from '../desktop/bundle.js';
 import { createAutostartBackend } from '../providers/autostart/index.js';
 
 const args = process.argv.slice(2); const command = args[0] ?? 'launch';
@@ -32,6 +33,8 @@ Everyday:
   cftunnel init               Terminal wizard
   cftunnel ui                 Open the dashboard (menu bar window if installed, else browser)
   cftunnel tray               Install/start the menu bar app (downloads Electron ${ELECTRON_VERSION} once)
+                              On macOS this also creates ~/Applications/Cloudflare Tunnel Kit.app for the Dock
+                              (--reinstall-app rebuilds it)
   cftunnel daemon start|stop|restart|status
                               Background service that keeps tunnels running after the terminal closes
   cftunnel autostart enable|disable|status
@@ -42,7 +45,7 @@ Everyday:
   cftunnel update [--check]   Check for or install a new cftunnel version
 
 Commands: init create quick start stop restart status doctor ui tray daemon autostart account settings update
-Options: --url URL --name NAME --hostname HOST --path DIR --project-name NAME --profile custom|laravel --account ID --project ID --port PORT --dry-run --yes --json --no-open --browser --foreground
+Options: --replace-dns (with retry: replace an existing DNS record) --url URL --name NAME --hostname HOST --path DIR --project-name NAME --profile custom|laravel --account ID --project ID --port PORT --dry-run --yes --json --no-open --browser --foreground
 UI port precedence: --port, CLOUDFLARE_TUNNEL_KIT_UI_PORT, the uiPort setting, automatic
 The UI always binds to 127.0.0.1.`); }
 function interactiveRequired(): never { console.error('[INTERACTIVE_INPUT_REQUIRED] This command needs wizard input, but the terminal is not interactive.\nRun `npx cf-tunnel ui` or provide all required flags with `--yes`.'); process.exit(2); }
@@ -85,12 +88,25 @@ async function openUi(options: { browser?: boolean } = {}) {
   const client = await ensureDaemon({ tray: browser || flag('--no-open') || !runtime.installed });
   console.log(`Cloudflare Tunnel Kit v${client.info.version} running in the background at ${client.info.url}`);
   if (!browser && !flag('--no-open') && runtime.installed && runtime.binary) {
-    launchTray({ binary: runtime.binary, dataDir, nodePath, cliPath, openWindow: true });
+    launchTray({ binary: runtime.binary, appBinary: macApp(), dataDir, nodePath, cliPath, openWindow: true });
     console.log('Opened the Cloudflare Tunnel Kit window. Use the menu bar icon to reopen it.');
     return;
   }
   if (!runtime.installed) console.log('Tip: run `cftunnel tray` once to get a menu bar icon and a native settings window.');
   if (!flag('--no-open')) console.log((await launchBrowser(client.info.url)).message);
+}
+
+const macApp = () => process.platform === 'darwin' ? appBundleBinary() : undefined;
+
+/** Keeps ~/Applications/Cloudflare Tunnel Kit.app in sync with this CLI so it can be kept in the Dock. */
+async function ensureMacApp(binary: string, force = false): Promise<void> {
+  if (process.platform !== 'darwin') return;
+  const config = { version: packageVersion, nodePath, cliPath, dataDir };
+  if (!force && bundleIsCurrent(config)) return;
+  try {
+    const target = await installAppBundle({ electronBinary: binary, config });
+    console.log(`Installed ${target}. Open it from Launchpad or Spotlight; while it runs, right-click its Dock icon → Options → Keep in Dock.`);
+  } catch (error) { console.log(`Could not create the macOS app (${error instanceof Error ? error.message : String(error)}). The menu bar app still works.`); }
 }
 
 async function tray() {
@@ -101,9 +117,10 @@ async function tray() {
     if (!await confirm('Download and install it now?')) { console.log('Cancelled. `cftunnel ui --browser` opens the dashboard in your browser instead.'); return; }
     runtime = await installRuntime({ runtimeDir: paths.runtimeDir, nodePath });
   }
+  await ensureMacApp(runtime.binary!, flag('--reinstall-app'));
   await ensureDaemon({ tray: false });
   const delay = Number(value('--delay') ?? 0); if (delay > 0) await new Promise(resolve => setTimeout(resolve, Math.min(delay, 30_000)));
-  launchTray({ binary: runtime.binary!, dataDir, nodePath, cliPath, openWindow: !flag('--background') });
+  launchTray({ binary: runtime.binary!, appBinary: macApp(), dataDir, nodePath, cliPath, openWindow: !flag('--background') });
   console.log('Cloudflare Tunnel Kit is in the menu bar. Closing the window keeps tunnels running.');
 }
 
@@ -116,9 +133,9 @@ async function daemon(sub = 'status') {
   if (sub === 'stop' || sub === 'restart') {
     const client = await connectDaemon(dataDir);
     if (client) {
-      await client.post('/api/daemon/shutdown');
+      await client.post('/api/daemon/shutdown', { resume: sub === 'restart' });
       for (let attempt = 0; attempt < 100 && pidAlive(client.info.pid); attempt++) await new Promise(resolve => setTimeout(resolve, 100));
-      console.log('Background service stopped. Running tunnels were stopped.');
+      console.log(sub === 'restart' ? 'Background service stopped; running tunnels will be started again.' : 'Background service stopped. Running tunnels were stopped.');
     } else console.log('The background service is not running.');
     if (sub === 'restart') return daemon('start');
     return;
@@ -243,6 +260,7 @@ async function main() {
       : command === 'start' ? await service.start(projectId)
       : command === 'stop' ? await service.stop(projectId)
       : command === 'restart' ? await service.restart(projectId)
+      : flag('--replace-dns') ? await service.replaceDns(projectId)
       : await service.retry(projectId);
     print(result ?? { ok: true }); service.close(); return;
   }

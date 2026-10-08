@@ -16,6 +16,7 @@ import { resolveSettings, validateSettingsPatch, settingDefinitions, defaultSett
 import { createAutostartBackend, type AutostartBackend } from '../providers/autostart/index.js';
 import { findExecutable } from '../providers/executables.js';
 import { UpdateService } from './updates.js';
+import { validateTunnelConfig } from '../core/validation.js';
 
 const PLAN_TTL_MS = 10 * 60_000;
 
@@ -29,6 +30,7 @@ export class TunnelKitService {
   readonly accounts?: AccountService; readonly autostart?: AutostartBackend; readonly updates?: UpdateService; readonly feed: ActivityFeed = new ActivityFeed();
   private readonly runtime?: RuntimeInfo; private readonly cloudflaredExecutable?: string;
   private activeWorkflows = 0;
+  private readonly starting = new Set<string>();
   constructor(options: { store: any; supervisor: any; quickWorkflow: any; namedWorkflow: any; cloudflare: any; database?: Database.Database; accounts?: AccountService; autostart?: AutostartBackend; updates?: UpdateService; feed?: ActivityFeed; runtime?: RuntimeInfo; cloudflaredExecutable?: string }) {
     Object.assign(this, options); this.database = options.database;
   }
@@ -59,7 +61,7 @@ export class TunnelKitService {
       const tunnel = this.store.getTunnelForProject(project.id);
       let session: any; try { session = this.store.getLatestSession(project.id); } catch {}
       const observed = session ? this.supervisor.status(session.processKey) : { state: 'stopped', logs: '' };
-      const status = !existsSync(project.path) ? 'Needs attention' : observed.state === 'running' ? 'Running' : 'Stopped';
+      const status = this.starting.has(project.id) ? 'Starting' : !existsSync(project.path) ? 'Needs attention' : observed.state === 'running' ? 'Running' : 'Stopped';
       return { ...project, status, kind: tunnel?.kind, hostname: tunnel?.hostname, localUrl: tunnel?.localUrl, publicUrl: session?.ephemeralUrlExpired ? undefined : session?.ephemeralUrl ?? (observed.state === 'running' && tunnel?.hostname ? `https://${tunnel.hostname}` : undefined), processState: observed.state, accountId: tunnel?.accountId, accountLabel: tunnel?.accountId ? labels.get(tunnel.accountId) : undefined, hasTunnel: Boolean(tunnel?.uuid) };
     });
   }
@@ -71,13 +73,28 @@ export class TunnelKitService {
     return { ...project, tunnel, session, health: { localProcess: observed.state, cloudflareConnector: 'unknown', publicHostname: 'unchecked' }, logs: observed.logs };
   }
 
-  async prepareQuick(input: any): Promise<PreparedPlan> { return this.savePlan('quick', input, [`Start a temporary Quick Tunnel to ${input.localUrl}.`], ['start-connector']); }
+  async prepareQuick(input: any): Promise<PreparedPlan> {
+    input = this.checkInput('quick', input);
+    return this.savePlan('quick', input, [`Start a temporary Quick Tunnel to ${input.localUrl}.`], ['start-connector']);
+  }
   async prepareNamed(input: any): Promise<PreparedPlan> {
+    input = this.checkInput('named', input);
     const accountId = input.accountId || this.getSettings().defaultAccountId || undefined;
     const account = accountId && this.accounts ? this.store.getAccount(accountId) : undefined;
     const where = account ? ` in Cloudflare account ${account.label}` : '';
     return this.savePlan('named', { ...input, accountId }, [`Create or reuse tunnel ${input.tunnelName}${where}.`, `Create DNS route ${input.hostname}.`, `Start a connector to ${input.localUrl}.`], ['cloudflare-resources', 'start-connector']);
   }
+  /** Rejects invalid settings before the review step, so a failed run never leaves a half-created project behind. */
+  private checkInput(kind: 'quick' | 'named', raw: any): any {
+    const input = { ...raw, localUrl: String(raw?.localUrl ?? '').trim(), tunnelName: typeof raw?.tunnelName === 'string' ? raw.tunnelName.trim().toLowerCase() : raw?.tunnelName, hostname: typeof raw?.hostname === 'string' ? raw.hostname.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/[/?#].*$/, '') : raw?.hostname };
+    const issues = [];
+    if (!String(input.projectPath ?? '').trim()) issues.push({ code: 'INPUT_PROJECT_PATH_REQUIRED', field: 'projectPath', reason: 'A project folder is required.', fix: 'Enter the folder of the local project.' });
+    const validation = validateTunnelConfig({ profile: input.profile ?? 'custom', operation: kind === 'named' ? 'create' : 'quick', localUrl: input.localUrl, tunnelName: input.tunnelName, hostname: input.hostname, projectRoot: input.projectPath });
+    issues.push(...validation.issues);
+    if (issues.length) throw Object.assign(new Error(`${issues[0].reason} ${issues[0].fix}`), { issues });
+    return input;
+  }
+
   private savePlan(kind: 'quick' | 'named', input: any, effects: string[], confirmations: string[]): PreparedPlan {
     for (const [id, saved] of this.plans) if (Date.now() - saved.createdAt > PLAN_TTL_MS) this.plans.delete(id);
     const plan = { id: crypto.randomUUID(), kind, input, effects, confirmations, createdAt: Date.now() }; this.plans.set(plan.id, plan); return plan;
@@ -93,9 +110,20 @@ export class TunnelKitService {
     return this.track(plan.kind, () => plan.kind === 'quick' ? this.quickWorkflow.run(plan.input) : this.namedWorkflow.run(plan.input));
   }
 
-  async retry(projectId: string): Promise<any> { const tunnel = this.store.getTunnelForProject(projectId); const kind = tunnel?.kind === 'named' ? 'named' : 'quick'; return this.track(kind, () => kind === 'named' ? this.namedWorkflow.retry(projectId) : this.quickWorkflow.restart(projectId)); }
+  async retry(projectId: string): Promise<any> {
+    const tunnel = this.store.getTunnelForProject(projectId); const kind = tunnel?.kind === 'named' ? 'named' : 'quick';
+    this.starting.add(projectId);
+    try { return await this.track(kind, () => kind === 'named' ? this.namedWorkflow.retry(projectId) : this.quickWorkflow.restart(projectId)); }
+    finally { this.starting.delete(projectId); }
+  }
   async stop(projectId: string): Promise<void> { const tunnel = this.store.getTunnelForProject(projectId); return tunnel?.kind === 'named' ? this.namedWorkflow.stop(projectId) : this.quickWorkflow.stop(projectId); }
   async start(projectId: string): Promise<any> { return this.retry(projectId); }
+  /** Points the hostname at this project's tunnel even when another DNS record exists. Only called after the user confirms. */
+  async replaceDns(projectId: string): Promise<any> {
+    const tunnel = this.store.getTunnelForProject(projectId);
+    if (tunnel?.kind !== 'named') throw new Error('Only custom-domain projects have a DNS record.');
+    return this.track('named', () => this.namedWorkflow.retry(projectId, { replaceDns: true }));
+  }
   async restart(projectId: string): Promise<any> { try { await this.stop(projectId); } catch {} return this.start(projectId); }
 
   private async track(kind: 'quick' | 'named', operation: () => Promise<any>): Promise<any> {

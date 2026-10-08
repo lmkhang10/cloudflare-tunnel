@@ -10,6 +10,7 @@ import { findDaemon, removeDaemonInfo, writeDaemonInfo } from './lock.js';
 import { createFileLogger, type Logger } from './logger.js';
 import { ConnectorWatchdog } from './watchdog.js';
 import { launchTray, runtimeStatus } from '../desktop/runtime.js';
+import { appBundleBinary } from '../desktop/bundle.js';
 
 export interface DaemonOptions { dataDir: string; version: string; nodePath: string; cliPath: string; port?: number; tray?: boolean; echo?: boolean; }
 
@@ -60,7 +61,11 @@ export async function runDaemon(options: DaemonOptions): Promise<number> {
     service, version: options.version, sessionToken: token,
     daemon: {
       pid: process.pid, startedAt,
-      shutdown: async () => { setTimeout(() => void shutdown(0), 50); return { stopping: true }; },
+      // resume: the next service start brings back the tunnels running now (used by `daemon restart`).
+      shutdown: async ({ resume = false } = {}) => {
+        if (resume) writeFileSync(path.join(options.dataDir, 'resume.json'), JSON.stringify({ projectIds: service.runningProjectIds(), savedAt: new Date().toISOString() }), { mode: 0o600 });
+        setTimeout(() => void shutdown(0), 50); return { stopping: true, resume };
+      },
       installUpdate: () => installUpdate(service, options, log, shutdown),
     },
   });
@@ -122,7 +127,8 @@ async function restoreProjects(service: TunnelKitService, dataDir: string, log: 
   } catch {}
   rmSync(resumeFile, { force: true });
   if (service.getSettings().restoreTunnelsOnLaunch) for (const project of (service as any).store.listProjects()) if (project.autoStart) ids.add(project.id);
-  for (const id of ids) {
+  // Projects start in parallel; each named setup spends several seconds on Cloudflare round-trips.
+  await Promise.all([...ids].map(async id => {
     // Project ids look like tokens to the log redactor, so log the display name instead.
     let name = 'a project'; try { name = (service as any).store.getProject(id).displayName; } catch {}
     try {
@@ -130,14 +136,14 @@ async function restoreProjects(service: TunnelKitService, dataDir: string, log: 
       if (result?.state === 'failed') log('warn', `Could not restore ${name}: ${result.error?.reason ?? result.error?.summary ?? 'unknown error'}`);
       else log('info', `Restored ${name}.`);
     } catch (error) { log('warn', `Could not restore ${name}: ${error instanceof Error ? error.message : String(error)}`); }
-  }
+  }));
 }
 
 function startTray(options: DaemonOptions, runtimeDir: string, log: Logger): void {
   const runtime = runtimeStatus(runtimeDir);
   if (!runtime.installed || !runtime.binary) return;
   if (!runtime.current) log('warn', `Desktop runtime ${runtime.version} differs from ${runtime.expected}; run \`cftunnel tray\` to update it.`);
-  try { launchTray({ binary: runtime.binary, dataDir: options.dataDir, nodePath: options.nodePath, cliPath: options.cliPath }); }
+  try { launchTray({ binary: runtime.binary, appBinary: process.platform === 'darwin' ? appBundleBinary() : undefined, dataDir: options.dataDir, nodePath: options.nodePath, cliPath: options.cliPath }); }
   catch (error) { log('warn', `Could not start the menu bar app: ${error instanceof Error ? error.message : String(error)}`); }
 }
 

@@ -35,3 +35,4 @@ export * from './daemon/daemon.js';
 export * from './desktop/icon.js';
 export * from './desktop/runtime.js';
 export * from './ui/server.js';
+export * from './desktop/bundle.js';

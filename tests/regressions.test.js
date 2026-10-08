@@ -10,7 +10,7 @@ test('keeps long public Quick Tunnel hostnames but still redacts long tokens', (
 
 test('rejects non-list confirmations instead of substring-matching them', async () => {
   const service = new TunnelKitService({ store: {}, supervisor: {}, quickWorkflow: { run: async () => ({ state: 'succeeded' }) }, namedWorkflow: {}, cloudflare: {} });
-  const plan = await service.prepareQuick({ localUrl: 'http://127.0.0.1:8000' });
+  const plan = await service.prepareQuick({ projectPath: '/work/shop', localUrl: 'http://127.0.0.1:8000' });
   await assert.rejects(service.execute(plan.id, 'start-connector'), /list/);
 });
 

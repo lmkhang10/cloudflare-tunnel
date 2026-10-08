@@ -30,7 +30,7 @@ export function remoteService(client: DaemonClient): any {
     prepareNamed: (input: any) => client.post('/api/plans/named', input),
     execute: (planId: string, confirmations: string[]) => client.post('/api/execute', { planId, confirmations }),
     start: (id: string) => project(id, 'start'), stop: (id: string) => project(id, 'stop'),
-    restart: (id: string) => project(id, 'restart'), retry: (id: string) => project(id, 'retry'),
+    restart: (id: string) => project(id, 'restart'), retry: (id: string) => project(id, 'retry'), replaceDns: (id: string) => project(id, 'replace-dns'),
     close: () => undefined,
   };
 }

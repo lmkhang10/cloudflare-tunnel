@@ -8,12 +8,12 @@ export function dashboardPage(version = '0.1.8', options: PageOptions = {}): str
   const boot = JSON.stringify({ cwd: process.cwd(), daemon: Boolean(options.daemon), shell: options.shell ?? 'browser' }).replace(/</g, '\\u003c');
   return String.raw`<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light dark">
-<title>Cloudflare Tunnel Kit v${escapeAttribute(version)}</title>
+<title>Cloudflare Tunnel Kit v${escapeAttribute(version)}</title><link rel="icon" type="image/png" href="/favicon.png">
 <style>${styles}</style></head>
 <body class="shell-${options.shell === 'desktop' ? 'desktop' : 'browser'}">
 ${icons}
 <header class="topbar">
-  <div class="brand"><span class="logo"><svg class="i" aria-hidden="true"><use href="#i-cloud"/></svg></span><b>Cloudflare Tunnel Kit</b><span class="ver">v${escapeAttribute(version)}</span></div>
+  <div class="brand"><img class="logo" src="/logo.png" alt="" width="28" height="28"><b>Cloudflare Tunnel Kit</b><span class="ver">v${escapeAttribute(version)}</span></div>
   <div class="service ${options.daemon ? 'on' : 'off'}" title="${options.daemon ? 'Tunnels keep running when this window closes.' : 'Tunnels stop when the terminal running cftunnel ui --foreground closes.'}"><i class="dot"></i>${options.daemon ? 'Background service' : 'Foreground mode'}</div>
   <div class="top-actions">
     <button class="btn ghost" data-action="doctor" title="Run system checks"><svg class="i" aria-hidden="true"><use href="#i-activity"/></svg><span>System check</span></button>
@@ -40,7 +40,7 @@ ${icons}
     <div class="list" id="projects"><div class="skeleton"></div><div class="skeleton"></div></div>
   </section>
   <section class="panel compact" aria-labelledby="env-title">
-    <div class="panel-head"><h2 id="env-title">Environment</h2><button class="btn ghost sm" data-action="doctor">Run checks</button></div>
+    <div class="panel-head"><div><h2 id="env-title">Environment</h2><p class="muted" id="env-checked">Checks Node.js, cloudflared, your Cloudflare accounts, and launch at login.</p></div><button class="btn ghost sm" data-action="doctor">Run checks</button></div>
     <div class="checks" id="checks"><div class="check"><i class="dot"></i><div><b>Not checked yet</b><span>Checks run when the page opens.</span></div></div></div>
   </section>
 </main>
@@ -54,7 +54,7 @@ ${icons}
       <div class="field"><label for="f-path">Project folder</label><input id="f-path" name="projectPath" required value="${escapeAttribute(process.cwd())}"><p class="hint">Used to name and find the project. Nothing is written here.</p></div>
       <div class="field"><label for="f-url">Local application URL</label><input id="f-url" name="localUrl" required value="http://127.0.0.1:8000"><p class="hint">The app must be running when the tunnel starts.</p></div>
       <div id="named-fields" class="hidden">
-        <div class="grid2"><div class="field"><label for="f-tunnel">Tunnel name</label><input id="f-tunnel" name="tunnelName" placeholder="my-project"></div><div class="field"><label for="f-host">Public hostname</label><input id="f-host" name="hostname" placeholder="dev.example.com"></div></div>
+        <div class="grid2"><div class="field"><label for="f-tunnel">Tunnel name</label><input id="f-tunnel" name="tunnelName" placeholder="my-project" autocapitalize="off" spellcheck="false"><p class="hint">Lowercase letters, numbers, and hyphens.</p></div><div class="field"><label for="f-host">Public hostname</label><input id="f-host" name="hostname" placeholder="dev.example.com"></div></div>
         <div class="field"><label for="account-select">Cloudflare account</label><select name="accountId" id="account-select"></select><p class="hint">The root domain must be managed by this account. <a href="#" data-open-settings="accounts">Manage accounts</a></p></div>
       </div>
       <div class="field"><label for="f-profile">Project type</label><select id="f-profile" name="profile"><option value="custom">Custom</option><option value="laravel">Laravel</option></select></div>
@@ -146,7 +146,8 @@ input,select{height:36px;width:100%;padding:0 var(--sp-3);border:1px solid var(-
 input:focus,select:focus{border-color:var(--accent);box-shadow:var(--focus)}
 input[aria-invalid=true]{border-color:var(--danger)}
 .hint{margin:0;font-size:var(--fs-xs);color:var(--text-2)}
-.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3)}
+.hint.field-error{color:var(--danger)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3);align-items:start}
 
 .notice{display:block;padding:var(--sp-3);border-radius:var(--r-md);font-size:var(--fs-sm);background:var(--surface-2);border:1px solid var(--border)}
 .notice.info{background:var(--accent-soft);border-color:transparent}
@@ -156,7 +157,7 @@ input[aria-invalid=true]{border-color:var(--danger)}
 
 .topbar{position:sticky;top:0;z-index:10;height:56px;display:flex;align-items:center;gap:var(--sp-4);padding:0 var(--sp-6);background:color-mix(in srgb,var(--surface) 86%,transparent);backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid var(--border)}
 .brand{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-md)}
-.logo{width:28px;height:28px;border-radius:var(--r-md);display:grid;place-items:center;background:var(--brand);color:#fff}.logo .i{width:16px;height:16px;fill:#fff;stroke:none}
+.logo{width:28px;height:28px;object-fit:contain}
 .ver{font-size:var(--fs-xs);color:var(--text-3)}
 .service{display:flex;align-items:center;gap:var(--sp-2);font-size:var(--fs-xs);color:var(--text-2);padding:0 var(--sp-2);height:24px;border-radius:var(--r-full);background:var(--surface-2)}
 .service.off .dot{background:var(--warning)}
@@ -208,7 +209,10 @@ input[aria-invalid=true]{border-color:var(--danger)}
 
 .checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:var(--sp-2) var(--sp-4);padding:0 var(--sp-5) var(--sp-4)}
 .check{display:flex;gap:var(--sp-2);align-items:flex-start;font-size:var(--fs-sm)}.check .dot{margin-top:6px}
-.check b{display:block;font-weight:600}.check span{color:var(--text-2);font-size:var(--fs-xs)}
+.check b{display:block;font-weight:600}.check span{display:block;color:var(--text-2);font-size:var(--fs-xs)}
+.check-fix{font-size:var(--fs-xs);font-weight:600}
+.panel.flash{animation:flash 1.2s var(--ease)}
+@keyframes flash{0%{box-shadow:0 0 0 0 transparent}20%{box-shadow:0 0 0 4px var(--accent-soft),var(--shadow-md)}100%{box-shadow:var(--shadow-sm)}}
 #env-banner:empty{display:none}
 
 .drawer{position:fixed;inset:0;z-index:30;visibility:hidden;pointer-events:none}
@@ -288,9 +292,9 @@ const q=(s,root)=>(root||document).querySelector(s),qa=(s,root)=>[...(root||docu
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const icon=name=>'<svg class="i" aria-hidden="true"><use href="#i-'+name+'"/></svg>';
 
-async function api(url,options={}){const headers={'content-type':'application/json',...(options.headers||{})};if(token)headers['x-confirmation-token']=token;const r=await fetch(url,{...options,headers});const body=await r.json().catch(()=>({error:'Invalid server response'}));if(!r.ok)throw new Error(body.error||body.issues?.[0]?.reason||'Request failed');return body}
+async function api(url,options={}){const headers={'content-type':'application/json',...(options.headers||{})};if(token)headers['x-confirmation-token']=token;const r=await fetch(url,{...options,headers});const body=await r.json().catch(()=>({error:'Invalid server response'}));if(!r.ok)throw Object.assign(new Error(body.error||body.issues?.[0]?.reason||'Request failed'),{issues:body.issues});return body}
 function toast(message,kind,ms){const el=q('#toast');el.className='toast'+(kind==='error'?' error':'');el.innerHTML=icon(kind==='error'?'alert':'check')+'<span>'+esc(message)+'</span>';clearTimeout(toast.timer);toast.timer=setTimeout(()=>el.classList.add('hidden'),ms||(kind==='error'?6000:2800))}
-function describeError(e){e=e||{};return {title:e.title||e.reason||e.summary||e.code||'The workflow failed.',detail:[e.title?e.summary:'',e.fix,(e.remediationSteps||[]).join(' ')].filter(Boolean).join(' ')}}
+function describeError(e){e=e||{};return {code:e.code,title:e.title||e.reason||e.summary||e.code||'The workflow failed.',detail:[e.title?e.summary:'',e.fix,(e.remediationSteps||[]).join(' ')].filter(Boolean).join(' ')}}
 async function copy(text){try{await navigator.clipboard.writeText(text||'');toast('Tunnel URL copied')}catch{toast('Copy failed. Select the URL manually.','error')}}
 
 /* ---------- accounts ---------- */
@@ -305,17 +309,39 @@ function render(){
   q('#summary').textContent=projects.length?(live+' of '+projects.length+' running · Saved projects stored only on this machine'):'Saved projects · stored only on this machine';
   q('[data-action="start-all"]').disabled=!projects.length||live===projects.length;
   q('[data-action="stop-all"]').disabled=!live;
-  const kept={};for(const id of openDetails){const box=q('[data-details="'+CSS.escape(id)+'"]');if(box)kept[id]=box.innerHTML}
-  q('#projects').innerHTML=projects.length?projects.map(row).join(''):emptyState();
-  for(const id of openDetails){const box=q('[data-details="'+CSS.escape(id)+'"]');if(box&&kept[id])box.innerHTML=kept[id];renderDetails(id)}
+  patchRows();
+}
+/* Background refreshes only touch rows whose data changed, so hover, focus, menus, and scroll positions survive. */
+const rowSignatures=new Map();
+function patchRows(){
+  const list=q('#projects');
+  if(!projects.length){if(!list.querySelector('.empty-state')){list.innerHTML=emptyState();rowSignatures.clear()}return}
+  list.querySelector('.empty-state,.skeleton')&&(list.innerHTML='');
+  const wanted=new Set(projects.map(p=>p.id));
+  for(const el of qa('[data-row]',list))if(!wanted.has(el.dataset.row)){el.remove();rowSignatures.delete(el.dataset.row)}
+  let previous=null;
+  for(const p of projects){
+    const signature=JSON.stringify([p,busy[p.id]||'',projectErrors[p.id]||null,openDetails.has(p.id)]);
+    let el=q('[data-row="'+CSS.escape(p.id)+'"]',list);
+    if(!el||rowSignatures.get(p.id)!==signature){
+      const holder=document.createElement('div');holder.innerHTML=row(p);const fresh=holder.firstElementChild;
+      const oldDetails=el&&q('[data-details]',el),newDetails=q('[data-details]',fresh);
+      if(oldDetails&&newDetails&&openDetails.has(p.id)){newDetails.replaceWith(oldDetails)}
+      if(el)el.replaceWith(fresh);else list.append(fresh);
+      el=fresh;rowSignatures.set(p.id,signature);
+    }
+    if(previous?previous.nextElementSibling!==el:list.firstElementChild!==el)(previous?previous.after(el):list.prepend(el));
+    previous=el;
+  }
+  for(const id of openDetails)renderDetails(id);
 }
 function emptyState(){return '<div class="empty-state"><h2>No tunnels yet</h2><p>Share a local app with a temporary URL or connect your own domain.</p><div class="choices"><button class="choice" data-new="quick">'+icon('bolt')+'<b>Quick Tunnel</b><small>Temporary trycloudflare.com URL. No account needed.</small></button><button class="choice" data-new="named">'+icon('globe')+'<b>Custom domain</b><small>Your own hostname through a Cloudflare account.</small></button></div></div>'}
-function statusBadge(p){if(busy[p.id])return '<span class="badge"><span class="spinner" aria-hidden="true"></span>'+esc(busy[p.id])+'</span>';if(p.status==='Running')return '<span class="badge success">Running</span>';if(p.status==='Needs attention')return '<span class="badge warning">Needs attention</span>';if(projectErrors[p.id])return '<span class="badge danger">Failed</span>';return '<span class="badge">Stopped</span>'}
+function statusBadge(p){if(p.status==='Starting'&&!busy[p.id])return '<span class="badge"><span class="spinner" aria-hidden="true"></span>Starting…</span>';if(busy[p.id])return '<span class="badge"><span class="spinner" aria-hidden="true"></span>'+esc(busy[p.id])+'</span>';if(p.status==='Running')return '<span class="badge success">Running</span>';if(p.status==='Needs attention')return '<span class="badge warning">Needs attention</span>';if(projectErrors[p.id])return '<span class="badge danger">Failed</span>';return '<span class="badge">Stopped</span>'}
 function row(p){
   const isRunning=p.status==='Running',dot=isRunning?'ok':projectErrors[p.id]?'bad':p.status==='Needs attention'?'warn':'';
   const url=p.publicUrl?'<a href="'+esc(p.publicUrl)+'" target="_blank" rel="noreferrer">'+esc(p.publicUrl.replace(/^https?:\/\//,''))+'</a><button class="copy" data-copy-url="'+esc(p.publicUrl)+'" aria-label="Copy URL" title="Copy URL">'+icon('copy')+'</button><span class="arrow">→</span>':(p.kind==='named'&&p.hostname?'<span>'+esc(p.hostname)+'</span><span class="arrow">→</span>':'');
-  const action=busy[p.id]?'<button class="btn secondary sm" disabled>'+esc(busy[p.id])+'</button>':isRunning?'<button class="btn secondary sm" data-project="'+esc(p.id)+'" data-command="stop">'+icon('stop')+'Stop</button>':'<button class="btn primary sm" data-project="'+esc(p.id)+'" data-command="start">'+icon('play')+'Start</button>';
-  const failure=projectErrors[p.id]&&!isRunning?'<div class="notice danger" role="alert"><b>'+esc(projectErrors[p.id].title)+'</b>'+esc(projectErrors[p.id].detail)+'</div>':'';
+  const action=busy[p.id]||p.status==='Starting'?'<button class="btn secondary sm" disabled>'+esc(busy[p.id]||'Starting…')+'</button>':isRunning?'<button class="btn secondary sm" data-project="'+esc(p.id)+'" data-command="stop">'+icon('stop')+'Stop</button>':'<button class="btn primary sm" data-project="'+esc(p.id)+'" data-command="start">'+icon('play')+'Start</button>';
+  const failure=projectErrors[p.id]&&!isRunning?'<div class="notice danger" role="alert"><b>'+esc(projectErrors[p.id].title)+'</b>'+esc(projectErrors[p.id].detail)+(projectErrors[p.id].code==='DNS_RECORD_EXISTS'?'<div class="row-actions" style="margin-top:8px"><button class="btn danger sm" data-project="'+esc(p.id)+'" data-command="replace-dns">Replace DNS record</button></div>':'')+'</div>':'';
   return '<article class="row" data-row="'+esc(p.id)+'">'
    +'<div class="row-main"><i class="dot '+dot+'"></i><div class="row-text"><div class="row-title"><b>'+esc(p.displayName)+'</b><span class="tag">'+(p.kind==='named'?'Custom domain':'Quick Tunnel')+'</span>'+(p.accountLabel?'<span class="tag">'+esc(p.accountLabel)+'</span>':'')+'</div>'
    +'<div class="row-meta">'+url+'<code>'+esc(p.localUrl||p.path)+'</code></div></div></div>'
@@ -332,8 +358,9 @@ function rowMenu(p){const isRunning=p.status==='Running';return '<div class="men
 
 async function runCommand(id,command){
   if(command==='remove-local'&&!confirm('Remove this project from the local dashboard? Cloudflare tunnel and DNS resources will not be deleted.'))return;
-  busy[id]={start:'Starting…',stop:'Stopping…',retry:'Retrying…',restart:'Restarting…','remove-local':'Removing…'}[command]||'Working…';delete projectErrors[id];render();
-  try{const result=await api('/api/projects/'+encodeURIComponent(id)+'/'+command,{method:'POST',body:'{}'});if(result&&result.state==='failed'){projectErrors[id]=describeError(result.error);toast(projectErrors[id].title,'error')}else if(command==='start'||command==='restart'||command==='retry')toast('Tunnel is running')}
+  if(command==='replace-dns'&&!confirm('Replace the existing DNS record for '+((projects.find(x=>x.id===id)||{}).hostname||'this hostname')+'? It will point to the tunnel of this project; whatever it pointed to before stops receiving traffic.'))return;
+  busy[id]={start:'Starting…',stop:'Stopping…',retry:'Retrying…',restart:'Restarting…','remove-local':'Removing…','replace-dns':'Updating DNS…'}[command]||'Working…';delete projectErrors[id];render();
+  try{const result=await api('/api/projects/'+encodeURIComponent(id)+'/'+command,{method:'POST',body:'{}'});if(result&&result.state==='failed'){projectErrors[id]=describeError(result.error);toast(projectErrors[id].title,'error')}else if(['start','restart','retry','replace-dns'].includes(command))toast('Tunnel is running')}
   catch(err){projectErrors[id]={title:err.message,detail:''};toast(err.message,'error')}
   finally{delete busy[id];await load()}
 }
@@ -344,13 +371,36 @@ async function renderDetails(id){
   try{const project=await api('/api/projects/'+encodeURIComponent(id));const health=project.health||{},tunnel=project.tunnel||{};const p=projects.find(x=>x.id===id)||{};
     let html='<div class="kv"><span>Local process</span><b>'+esc(health.localProcess||'unknown')+'</b><span>Cloudflare connector</span><b>'+esc(health.cloudflareConnector||'unknown')+'</b><span>Public hostname</span><b>'+esc(health.publicHostname||'unchecked')+'</b><span>Project folder</span><code>'+esc(project.path)+'</code>'+(tunnel.name?'<span>Tunnel</span><code>'+esc(tunnel.name)+'</code>':'')+'</div>';
     if(tunnel.kind==='named')html+='<div class="setting"><div><b>Cloudflare account</b><span>Changing it creates a new tunnel in that account on the next start.</span></div><select data-project-account="'+esc(id)+'" data-current="'+esc(p.accountId||'')+'">'+accountOptions(p.accountId||'',true)+'</select></div>';
-    html+='<pre aria-label="Connector logs">'+esc(project.logs||'No logs recorded.')+'</pre>';box.innerHTML=html}
+    html+='<pre aria-label="Connector logs">'+esc(project.logs||'No logs recorded.')+'</pre>';
+    if(box._html===html)return;
+    // Keep the log view where the reader left it: pinned to the bottom if it was, otherwise unchanged.
+    const pre=q('pre',box),atBottom=!pre||pre.scrollTop+pre.clientHeight>=pre.scrollHeight-4,offset=pre?pre.scrollTop:0,focused=box.contains(document.activeElement);
+    if(focused&&box._html)return;
+    box.innerHTML=html;box._html=html;const next=q('pre',box);if(next)next.scrollTop=atBottom?next.scrollHeight:offset}
   catch(e){box.innerHTML='<div class="notice danger">'+esc(e.message)+'</div>'}
 }
-function toggleDetails(id){if(openDetails.has(id)){openDetails.delete(id);const box=q('[data-details="'+CSS.escape(id)+'"]');if(box){box.classList.add('hidden');box.innerHTML=''}}else{openDetails.add(id);renderDetails(id)}}
+function toggleDetails(id){if(openDetails.has(id)){openDetails.delete(id);const box=q('[data-details="'+CSS.escape(id)+'"]');if(box){box.classList.add('hidden');box.innerHTML='';box._html=''}}else{openDetails.add(id);renderDetails(id)}}
 
 /* ---------- environment ---------- */
-async function doctor(){try{const data=await api('/api/doctor');const dot=s=>s==='passed'?'ok':s==='failed'?'bad':s==='warning'?'warn':'';q('#checks').innerHTML=data.checks.map(c=>'<div class="check"><i class="dot '+dot(c.state)+'"></i><div><b>'+esc(c.name)+'</b><span>'+esc(c.detail)+'</span></div></div>').join('');const failed=data.checks.filter(c=>c.state==='failed');q('#env-banner').innerHTML=failed.length?'<div class="notice danger" role="alert"><b>'+esc(failed.map(c=>c.name).join(', ')+' needs attention')+'</b>'+esc(failed.map(c=>c.detail).join(' '))+'</div>':''}catch(e){toast(e.message,'error')}}
+const checkFixes={'cloudflared':['cloudflared','Set the cloudflared path'],'Cloudflare accounts':['accounts','Connect an account'],'Launch at login':['general','Turn on']};
+function checkHtml(c){const dot=c.state==='passed'?'ok':c.state==='failed'?'bad':c.state==='warning'?'warn':'';const fix=c.state!=='passed'&&checkFixes[c.name];return '<div class="check"><i class="dot '+dot+'"></i><div><b>'+esc(c.name)+'</b><span>'+esc(c.detail)+'</span>'+(fix?'<a href="#" class="check-fix" data-open-settings="'+fix[0]+'">'+esc(fix[1])+' →</a>':'')+'</div></div>'}
+/* Manual runs (from a button) get visible feedback: busy buttons, a summary toast, and the panel scrolled into view. */
+async function doctor(manual){
+  const buttons=qa('[data-action="doctor"]');
+  if(manual)buttons.forEach(b=>{b.disabled=true;b._label=b.innerHTML;b.innerHTML='<span class="spinner" aria-hidden="true"></span>Checking…'});
+  try{
+    const data=await api('/api/doctor');
+    q('#checks').innerHTML=data.checks.map(checkHtml).join('');
+    q('#env-checked').textContent='Last checked '+new Date().toLocaleTimeString()+'.';
+    const failed=data.checks.filter(c=>c.state==='failed'),attention=data.checks.filter(c=>c.state==='failed'||c.state==='warning');
+    q('#env-banner').innerHTML=failed.length?'<div class="notice danger" role="alert"><b>'+esc(failed.map(c=>c.name).join(', ')+' needs attention')+'</b>'+esc(failed.map(c=>c.detail).join(' '))+'</div>':'';
+    if(manual){
+      const panel=q('#env-title').closest('.panel');panel.scrollIntoView({behavior:'smooth',block:'center'});panel.classList.remove('flash');void panel.offsetWidth;panel.classList.add('flash');
+      toast(attention.length?attention.length+' check'+(attention.length>1?'s need':' needs')+' attention: '+attention.map(c=>c.name).join(', '):'All '+data.checks.length+' checks passed',failed.length?'error':'');
+    }
+  }catch(e){toast(e.message,'error')}
+  finally{if(manual)buttons.forEach(b=>{b.disabled=false;if(b._label)b.innerHTML=b._label})}
+}
 
 /* ---------- menus ---------- */
 function closeMenus(){qa('.menu').forEach(m=>{if(m.id==='new-menu')m.hidden=true;else m.remove()});qa('[aria-expanded="true"]').forEach(b=>b.setAttribute('aria-expanded','false'));openMenu=null}
@@ -358,14 +408,16 @@ function toggleNewMenu(button){const menu=q('#new-menu');const open=menu.hidden;
 function toggleRowMenu(button){const id=button.dataset.rowMenu;const already=button.parentElement.querySelector('.menu');closeMenus();if(already)return;const p=projects.find(x=>x.id===id);if(!p)return;button.insertAdjacentHTML('afterend',rowMenu(p));openMenu=button.nextElementSibling;button.setAttribute('aria-expanded','true');openMenu.querySelector('button').focus()}
 
 /* ---------- create wizard ---------- */
-function openWizard(nextMode,trigger){closeMenus();mode=nextMode;stage=0;plan=null;wizardTrigger=trigger;q('#setup-form').reset();q('[name=projectPath]').value=boot.cwd;q('[name=localUrl]').value='http://127.0.0.1:8000';q('#named-fields').classList.toggle('hidden',mode!=='named');q('#named-notice').classList.toggle('hidden',mode!=='named');q('#wizard-title').textContent=mode==='named'?'Set up a custom domain':'Create a Quick Tunnel';q('#wizard-subtitle').textContent=mode==='named'?'Cloudflare account, tunnel, DNS, and connector':'No Cloudflare login required';if(mode==='named')fillAccountSelect();showStage();const drawer=q('#wizard');drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';q('.drawer-panel',drawer).focus();setTimeout(()=>q('[name=displayName]').focus(),250)}
+function openWizard(nextMode,trigger){closeMenus();mode=nextMode;stage=0;plan=null;wizardTrigger=trigger;q('#setup-form').reset();delete q('[name=tunnelName]').dataset.edited;qa('#setup-form .field-error').forEach(el=>el.remove());qa('#setup-form [aria-invalid]').forEach(el=>el.setAttribute('aria-invalid','false'));q('[name=projectPath]').value=boot.cwd;q('[name=localUrl]').value='http://127.0.0.1:8000';q('#named-fields').classList.toggle('hidden',mode!=='named');q('#named-notice').classList.toggle('hidden',mode!=='named');q('#wizard-title').textContent=mode==='named'?'Set up a custom domain':'Create a Quick Tunnel';q('#wizard-subtitle').textContent=mode==='named'?'Cloudflare account, tunnel, DNS, and connector':'No Cloudflare login required';if(mode==='named')fillAccountSelect();showStage();const drawer=q('#wizard');drawer.classList.add('open');drawer.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';q('.drawer-panel',drawer).focus();setTimeout(()=>q('[name=displayName]').focus(),250)}
 function closeWizard(){if(running)return;const drawer=q('#wizard');drawer.classList.remove('open');drawer.setAttribute('aria-hidden','true');document.body.style.overflow='';if(wizardTrigger?.focus)wizardTrigger.focus();wizardTrigger=null}
 function canClose(target){if(running)return false;const overlay=q('#wizard .drawer-overlay');return target===overlay||Boolean(target.closest?.('#wizard [data-close]'))}
 function showStage(){q('#fields').classList.toggle('hidden',stage!==0);q('#review').classList.toggle('hidden',stage!==1);q('#running').classList.toggle('hidden',stage!==2);qa('.stepper li').forEach((el,i)=>el.classList.toggle('active',i<=stage));q('#continue').textContent=stage===0?'Review changes':stage===1?'Confirm and run':'Done';q('#continue').disabled=stage===2&&running}
 function values(){const data=Object.fromEntries(new FormData(q('#setup-form')));return {...data,profile:data.profile||'custom'}}
 function validate(data){let first=null;const mark=(name,bad)=>{const el=q('[name='+name+']');el.setAttribute('aria-invalid',bad?'true':'false');if(bad&&!first)first=el};mark('displayName',!data.displayName);mark('localUrl',!/^https?:\/\//.test(data.localUrl||''));if(mode==='named'){mark('tunnelName',!data.tunnelName);mark('hostname',!data.hostname)}if(first){first.focus();throw new Error(mode==='named'&&(!data.tunnelName||!data.hostname)?'Tunnel name and public hostname are required.':'Check the highlighted fields.')}}
 function resultHtml(result){let html='';if(result&&result.state==='succeeded'){html='<div class="notice info"><b>'+icon('check')+' Tunnel is live</b>'+(result.publicUrl?'<div class="url-line"><a href="'+esc(result.publicUrl)+'" target="_blank" rel="noreferrer">'+esc(result.publicUrl)+'</a><button type="button" class="btn secondary sm" data-copy-url="'+esc(result.publicUrl)+'">'+icon('copy')+'Copy URL</button></div>':'')+'</div>'}else{const d=describeError(result&&result.error);html='<div class="notice danger"><b>'+esc(d.title)+'</b>'+esc(d.detail)+'</div>'}return html+'<details><summary>Technical details</summary><pre>'+esc(JSON.stringify(result,null,2))+'</pre></details>'}
-async function next(){try{if(stage===0){const data=values();validate(data);plan=await api('/api/plans/'+mode,{method:'POST',body:JSON.stringify(data)});q('#effects').innerHTML=plan.effects.map(x=>'<li>'+esc(x)+'</li>').join('');stage=1;showStage()}else if(stage===1){stage=2;running=true;showStage();q('#result').innerHTML='<span><span class="spinner" aria-hidden="true"></span>Running validated workflow…</span>';const result=await api('/api/execute',{method:'POST',body:JSON.stringify({planId:plan.id,confirmations:plan.confirmations})});q('#result').innerHTML=resultHtml(result);if(result.state==='failed'&&result.projectId)projectErrors[result.projectId]=describeError(result.error);await load()}else closeWizard()}catch(e){if(stage===2)q('#result').innerHTML=resultHtml({state:'failed',error:{title:e.message}});toast(e.message,'error')}finally{if(stage===2){running=false;showStage()}}}
+function markIssues(issues){let first=null;for(const issue of issues||[]){const el=issue.field&&q('#setup-form [name='+issue.field+']');if(el){el.setAttribute('aria-invalid','true');let hint=el.parentElement.querySelector('.field-error');if(!hint){hint=document.createElement('p');hint.className='hint field-error';el.parentElement.append(hint)}hint.textContent=issue.reason+' '+issue.fix;first=first||el}}first?.focus()}
+function slug(value){return String(value||'').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,63)}
+async function next(){try{if(stage===0){const data=values();qa('#setup-form .field-error').forEach(el=>el.remove());validate(data);try{plan=await api('/api/plans/'+mode,{method:'POST',body:JSON.stringify(data)})}catch(err){markIssues(err.issues);throw err}q('#effects').innerHTML=plan.effects.map(x=>'<li>'+esc(x)+'</li>').join('');stage=1;showStage()}else if(stage===1){stage=2;running=true;showStage();q('#result').innerHTML='<span><span class="spinner" aria-hidden="true"></span>Running validated workflow…</span>';const result=await api('/api/execute',{method:'POST',body:JSON.stringify({planId:plan.id,confirmations:plan.confirmations})});q('#result').innerHTML=resultHtml(result);if(result.state==='failed'&&result.projectId)projectErrors[result.projectId]=describeError(result.error);await load()}else closeWizard()}catch(e){if(stage===2)q('#result').innerHTML=resultHtml({state:'failed',error:{title:e.message}});toast(e.message,'error')}finally{if(stage===2){running=false;showStage()}}}
 
 /* ---------- settings ---------- */
 const settingsTabs=[['general','General'],['tunnels','Tunnels'],['accounts','Accounts'],['cloudflared','cloudflared'],['notifications','Notifications'],['updates','Updates']];
@@ -395,16 +447,19 @@ document.addEventListener('click',async e=>{
   if(t.dataset.copyUrl!==undefined){e.preventDefault();return copy(t.dataset.copyUrl)}
   if(t.dataset.openUrl){closeMenus();return window.open(t.dataset.openUrl,'_blank','noreferrer')}
   if(t.dataset.action==='refresh')return load();
-  if(t.dataset.action==='doctor')return doctor();
+  if(t.dataset.action==='doctor')return doctor(true);
   if(t.dataset.action==='start-all'||t.dataset.action==='stop-all'){t.disabled=true;try{await api('/api/projects/'+t.dataset.action,{method:'POST',body:'{}'})}catch(err){toast(err.message,'error')}return load()}
   if(t.dataset.action==='details'&&t.dataset.project){closeMenus();return toggleDetails(t.dataset.project)}
   if(t.dataset.project&&t.dataset.command){closeMenus();return runCommand(t.dataset.project,t.dataset.command)}
 });
 document.addEventListener('click',async e=>{const el=e.target.closest?.('[data-action="settings"],[data-open-settings],[data-settings-tab],[data-close-settings],[data-account],[data-import],[data-import-all],[data-update],[data-autostart-repair],[data-service]');if(!el)return;if(el.matches('[data-close-settings]')){closeSettings();return}e.preventDefault();try{if(el.dataset.action==='settings')return openSettings('general',el);if(el.dataset.openSettings){if(q('#wizard').classList.contains('open')&&!running)closeWizard();return openSettings(el.dataset.openSettings,el)}if(el.dataset.settingsTab){settingsTab=el.dataset.settingsTab;return renderSettings()}if(el.dataset.account)return accountAction(el.dataset.account,el.dataset.id,el);if(el.dataset.import){await api('/api/accounts/import',{method:'POST',body:JSON.stringify({candidateId:el.dataset.import})});toast('Account imported');accountsCache=null;return renderSettings()}if(el.hasAttribute('data-import-all')){for(const b of qa('[data-import]'))await api('/api/accounts/import',{method:'POST',body:JSON.stringify({candidateId:b.dataset.import})});toast('Accounts imported');accountsCache=null;return renderSettings()}if(el.dataset.update==='check'){el.disabled=true;await api('/api/updates/check',{method:'POST',body:'{}'});return renderSettings()}if(el.dataset.update==='install'){if(!confirm('Install the update now? Running tunnels restart and reconnect in a few seconds.'))return;el.disabled=true;await api('/api/updates/install',{method:'POST',body:'{}'});toast('Update installed. Reconnecting…');setTimeout(()=>location.reload(),6000);return}if(el.hasAttribute('data-autostart-repair')){await api('/api/autostart',{method:'POST',body:JSON.stringify({enabled:true})});toast('Launch at login repaired');return renderSettings()}if(el.dataset.service==='shutdown'){if(!confirm('Stop the background service? All running tunnels will stop.'))return;await api('/api/daemon/shutdown',{method:'POST',body:'{}'});toast('Background service stopped')}}catch(err){toast(err.message,'error');renderSettings()}});
+document.addEventListener('input',e=>{const el=e.target;if(el.name==='tunnelName'){const clean=el.value.toLowerCase().replace(/[^a-z0-9-]/g,'-');if(clean!==el.value)el.value=clean;el.dataset.edited='true'}if(el.name==='displayName'){const tunnel=q('[name=tunnelName]');if(tunnel&&!tunnel.dataset.edited)tunnel.value=slug(el.value)}if(el.getAttribute('aria-invalid')==='true'){el.setAttribute('aria-invalid','false');el.parentElement.querySelector('.field-error')?.remove()}});
 document.addEventListener('change',async e=>{const el=e.target;try{if(el.dataset.setting)return saveSetting(el);if(el.hasAttribute('data-autostart')){await api('/api/autostart',{method:'POST',body:JSON.stringify({enabled:el.checked})});toast(el.checked?'Launch at login turned on':'Launch at login turned off');return renderSettings()}if(el.dataset.autostartProject){await api('/api/projects/'+encodeURIComponent(el.dataset.autostartProject)+'/settings',{method:'POST',body:JSON.stringify({autoStart:el.checked})});toast(el.checked?'Starts with the service':'Auto-start off');const p=projects.find(x=>x.id===el.dataset.autostartProject);if(p)p.autoStart=el.checked;return}if(el.dataset.projectAccount){const id=el.dataset.projectAccount;const body={accountId:el.value};try{await api('/api/projects/'+encodeURIComponent(id)+'/settings',{method:'POST',body:JSON.stringify(body)})}catch(err){if(!/Confirm/.test(err.message))throw err;if(!confirm(err.message+' Continue?')){el.value=el.dataset.current;return}await api('/api/projects/'+encodeURIComponent(id)+'/settings',{method:'POST',body:JSON.stringify({...body,confirmNewTunnel:true})})}toast('Account updated. Start the project to create its tunnel there.');load()}}catch(err){toast(err.message,'error');if(el.type==='checkbox')el.checked=!el.checked;if(el.dataset.projectAccount)el.value=el.dataset.current}});
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(openMenu){const owner=openMenu.previousElementSibling;closeMenus();owner?.focus?.();return}if(q('#wizard').classList.contains('open')&&!running)closeWizard();else if(q('#settings').classList.contains('open'))closeSettings()});
 document.addEventListener('keydown',e=>{if(!openMenu||!['ArrowDown','ArrowUp'].includes(e.key))return;const items=qa('button',openMenu);const index=items.indexOf(document.activeElement);const nextIndex=(index+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;items[nextIndex].focus();e.preventDefault()});
 
-api('/api/session').then(x=>{token=x.confirmationToken;load();doctor();const params=new URLSearchParams(location.search);if(params.get('settings'))openSettings(params.get('settings'))}).catch(e=>toast(e.message,'error'));
-setInterval(()=>{if(!document.hidden&&!Object.keys(busy).length&&!openMenu)load()},10000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&token)load().then(schedulePoll)});
+api('/api/session').then(x=>{token=x.confirmationToken;load().then(schedulePoll);doctor();const params=new URLSearchParams(location.search);if(params.get('settings'))openSettings(params.get('settings'))}).catch(e=>toast(e.message,'error'));
+/* Refresh every 10s, or every 2s while a tunnel is starting; the delay is chosen after each load. */
+function schedulePoll(){clearTimeout(schedulePoll.timer);schedulePoll.timer=setTimeout(async()=>{if(!document.hidden&&!Object.keys(busy).length&&!openMenu)await load();schedulePoll()},projects.some(p=>p.status==='Starting')?2000:10000)}
 `;

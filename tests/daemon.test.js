@@ -53,8 +53,9 @@ test('runs in the background, restores auto-start projects, closes stale session
     assert.equal(settings.values.cloudflaredPath, wrapper);
     assert.ok((await client.get('/api/events')).events.some(event => event.type === 'quick-url'));
 
-    await client.post('/api/daemon/shutdown');
+    await client.post('/api/daemon/shutdown', { resume: true });
     assert.equal(await exited, 0);
+    assert.deepEqual(JSON.parse(await readFile(path.join(dataDir, 'resume.json'), 'utf8')).projectIds, [project.id], 'restart remembers running tunnels');
     assert.equal(existsSync(path.join(dataDir, 'daemon.json')), false);
     const reopened = openStateDatabase(path.join(dataDir, 'state.db'));
     const after = new StateStore(reopened);

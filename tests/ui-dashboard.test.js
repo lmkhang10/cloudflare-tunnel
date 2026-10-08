@@ -83,3 +83,11 @@ test('rejects credential-shaped fields at the local HTTP boundary', async () => 
     assert.equal(called, false);
   } finally { server.close(); }
 });
+
+test('ships page scripts that parse', async () => {
+  const { Script } = await import('node:vm');
+  const html = dashboardPage('1.0.0', { shell: 'desktop', daemon: true });
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(match => match[1]);
+  assert.ok(scripts.length > 0);
+  for (const source of scripts) assert.doesNotThrow(() => new Script(source), 'inline dashboard script must be valid JavaScript');
+});

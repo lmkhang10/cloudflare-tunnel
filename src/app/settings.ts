@@ -11,7 +11,7 @@ export type SettingDefinition = Descriptor & { key: string; group: SettingGroup;
 export const settingDefinitions = [
   { key: 'trayEnabled', group: 'general', type: 'boolean', default: true, label: 'Show the menu bar icon', hint: 'Start the tray app together with the background service when the desktop runtime is installed.' },
   { key: 'openWindowOnLaunch', group: 'general', type: 'boolean', default: false, label: 'Open the window when the tray starts' },
-  { key: 'showDockIcon', group: 'general', type: 'boolean', default: false, label: 'Show the Dock icon (macOS)', hint: 'Off keeps the app in the menu bar only.' },
+  { key: 'showDockIcon', group: 'general', type: 'boolean', default: false, label: 'Always show the Dock icon (macOS)', hint: 'Off shows it only while the window is open. Keep the app in the Dock from ~/Applications/Cloudflare Tunnel Kit.app.' },
   { key: 'uiPort', group: 'general', type: 'integer', default: 0, min: 0, max: 65535, label: 'Local UI port', hint: '0 picks a free port. A fixed port keeps bookmarks stable. Applies after the service restarts.' },
   { key: 'restoreTunnelsOnLaunch', group: 'tunnels', type: 'boolean', default: true, label: 'Start auto-start projects when the service launches' },
   { key: 'autoRestartOnCrash', group: 'tunnels', type: 'boolean', default: true, label: 'Restart a connector that exits unexpectedly' },

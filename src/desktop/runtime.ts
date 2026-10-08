@@ -44,9 +44,12 @@ export function installRuntime(options: { runtimeDir: string; nodePath: string; 
 }
 
 /** Starts the tray detached; Electron's single-instance lock turns a second launch into "open the window". */
-export function launchTray(options: { binary: string; dataDir: string; nodePath: string; cliPath: string; openWindow?: boolean; env?: NodeJS.ProcessEnv }): void {
+export function launchTray(options: { binary: string; dataDir: string; nodePath: string; cliPath: string; openWindow?: boolean; appBinary?: string; env?: NodeJS.ProcessEnv }): void {
   const env: NodeJS.ProcessEnv = { ...(options.env ?? process.env), CFTUNNEL_NODE: options.nodePath, CFTUNNEL_CLI: options.cliPath, CLOUDFLARE_TUNNEL_KIT_DATA_DIR: options.dataDir };
   delete env.ELECTRON_RUN_AS_NODE;
-  const child = spawn(options.binary, [desktopMainPath(), ...(options.openWindow ? ['--open-window'] : [])], { detached: true, stdio: 'ignore', env });
+  const flags = options.openWindow ? ['--open-window'] : ['--background'];
+  // The installed .app carries its own entry point; a bare runtime needs the main script path.
+  const useApp = Boolean(options.appBinary && existsSync(options.appBinary));
+  const child = spawn(useApp ? options.appBinary! : options.binary, useApp ? flags : [desktopMainPath(), ...flags], { detached: true, stdio: 'ignore', env });
   child.unref();
 }

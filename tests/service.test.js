@@ -32,3 +32,12 @@ test('prepares a review plan before executing a workflow', async () => {
   await service.execute(plan.id, ['start-connector']);
   assert.equal(received.localUrl, 'http://127.0.0.1:8000');
 });
+
+test('normalizes tunnel names and rejects invalid settings before the review step', async () => {
+  const service = new TunnelKitService({ store: { getSettings: () => ({}) }, supervisor: {}, cloudflare: {}, namedWorkflow: {}, quickWorkflow: {} });
+  const plan = await service.prepareNamed({ projectPath: '/work/lfms', profile: 'laravel', localUrl: 'http://127.0.0.1:8000', tunnelName: ' LFMS ', hostname: 'https://LFMS.Example.com/app' });
+  assert.equal(plan.input.tunnelName, 'lfms');
+  assert.equal(plan.input.hostname, 'lfms.example.com');
+  await assert.rejects(service.prepareNamed({ projectPath: '/work/lfms', profile: 'custom', localUrl: 'http://127.0.0.1:8000', tunnelName: 'law firm', hostname: 'lfms.example.com' }), error => error.issues[0].field === 'tunnelName');
+  await assert.rejects(service.prepareQuick({ projectPath: '/work/lfms', profile: 'custom', localUrl: 'ftp://x' }), error => error.issues[0].field === 'localUrl');
+});
