@@ -159,6 +159,8 @@ function renderMenu(): void {
         : { label: `Update ${updates.latest} available…`, click: () => void openWindow('updates') }
       : { label: 'Check for updates', click: () => act('Update check', async () => { const state = await api('POST', '/api/updates/check'); if (!state.available) notify('Cloudflare Tunnel Kit', `You are on the latest version (${state.current}).`); }) },
     { type: 'separator' },
+    { label: 'Built by Field Tech Vietnam · field.vn', click: () => void shell.openExternal('https://field.vn') },
+    { type: 'separator' },
     { label: 'Quit menu bar app (tunnels keep running)', click: () => { quitting = true; app.quit(); } },
     { label: 'Quit and stop all tunnels', click: () => act('Quit', async () => { await api('POST', '/api/daemon/shutdown'); quitting = true; app.quit(); }) },
   ] : [

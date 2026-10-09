@@ -47,7 +47,9 @@ Everyday:
 Commands: init create quick start stop restart status doctor ui tray daemon autostart account settings update
 Options: --replace-dns (with retry: replace an existing DNS record) --url URL --name NAME --hostname HOST --path DIR --project-name NAME --profile custom|laravel --account ID --project ID --port PORT --dry-run --yes --json --no-open --browser --foreground
 UI port precedence: --port, CLOUDFLARE_TUNNEL_KIT_UI_PORT, the uiPort setting, automatic
-The UI always binds to 127.0.0.1.`); }
+The UI always binds to 127.0.0.1.
+
+Built by Field Tech Vietnam, web and system development to Japanese standards: https://field.vn`); }
 function interactiveRequired(): never { console.error('[INTERACTIVE_INPUT_REQUIRED] This command needs wizard input, but the terminal is not interactive.\nRun `npx cf-tunnel ui` or provide all required flags with `--yes`.'); process.exit(2); }
 function resolveUiPort(): number | undefined { const raw = value('--port') ?? process.env.CLOUDFLARE_TUNNEL_KIT_UI_PORT; if (raw === undefined || raw === '') return undefined; const port = Number(raw); if (!Number.isInteger(port) || port < 0 || port > 65535) throw new Error(`Invalid UI port "${raw}". Use an integer from 0 to 65535.`); return port; }
 async function confirm(question: string): Promise<boolean> {

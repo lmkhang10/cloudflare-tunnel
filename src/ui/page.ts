@@ -44,6 +44,7 @@ ${icons}
     <div class="checks" id="checks"><div class="check"><i class="dot"></i><div><b>Not checked yet</b><span>Checks run when the page opens.</span></div></div></div>
   </section>
 </main>
+<footer class="credit"><a href="https://field.vn" target="_blank" rel="noopener"><img src="/logo.png" alt="" width="14" height="14">Built by <b>Field Tech Vietnam</b><span>·</span>Web &amp; system development to Japanese standards<span>·</span>field.vn →</a></footer>
 
 <div id="wizard" class="drawer" aria-hidden="true"><div class="drawer-overlay" data-close></div><section class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="wizard-title" tabindex="-1">
   <div class="drawer-head"><div><h2 id="wizard-title">Create a tunnel</h2><p class="muted" id="wizard-subtitle">Step-by-step setup</p></div><button class="close" data-close aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
@@ -253,6 +254,8 @@ input[aria-invalid=true]{border-color:var(--danger)}
 .toast{position:fixed;left:50%;bottom:var(--sp-6);transform:translateX(-50%);z-index:40;max-width:min(520px,calc(100vw - 32px));display:flex;gap:var(--sp-2);align-items:center;padding:10px var(--sp-4);border-radius:var(--r-md);background:var(--text);color:var(--bg);font-size:var(--fs-sm);box-shadow:var(--shadow-md)}
 .toast.error{background:var(--danger);color:#fff}
 
+.credit{max-width:1040px;margin:0 auto;padding:0 var(--sp-6) var(--sp-8);text-align:center;font-size:var(--fs-xs)}
+.credit a{color:var(--text-3);display:inline-flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:6px}.credit img{border-radius:3px}.credit a:hover{color:var(--accent-text);text-decoration:none}.credit b{color:var(--text-2);font-weight:600}
 @media (max-width:760px){
   .topbar{padding:0 var(--sp-4)}.top-actions .btn.ghost span,.service{display:none}
   .main{padding:var(--sp-4)}.row{grid-template-columns:1fr}.row-side{justify-content:space-between}

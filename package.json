@@ -2,6 +2,7 @@
   "name": "cloudflare-tunnel-kit",
   "version": "0.2.4",
   "description": "Safe, reusable Cloudflare Tunnel setup for custom and Laravel projects.",
+  "author": "Field Tech Vietnam (https://field.vn)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lmkhang10/cloudflare-tunnel.git"

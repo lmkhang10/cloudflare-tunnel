@@ -1,6 +1,10 @@
+<p align="center"><a href="https://field.vn"><img src="https://raw.githubusercontent.com/lmkhang10/cloudflare-tunnel/main/assets/logo.png" width="96" height="96" alt="Field Tech Vietnam logo"></a></p>
+
 # Cloudflare Tunnel Kit
 
 Expose local projects through Cloudflare Tunnel from a menu bar app, a browser dashboard, or the terminal. Tunnels run in a background service, so they keep running after you close the terminal.
+
+Built and maintained by [Field Tech Vietnam](https://field.vn).
 
 ![Cloudflare Tunnel Kit dashboard](https://raw.githubusercontent.com/lmkhang10/cloudflare-tunnel/main/images/demo.png)
 
@@ -100,6 +104,16 @@ node dist/cli/main.js          # run the local build
 ```
 
 Publish with `make publish` after bumping the version in `package.json`.
+
+## Built by Field Tech
+
+<a href="https://field.vn"><img src="https://raw.githubusercontent.com/lmkhang10/cloudflare-tunnel/main/assets/logo.png" width="48" height="48" alt="Field Tech Vietnam" align="left"></a>
+
+[**Field Tech Vietnam**](https://field.vn) builds web platforms and business systems to Japanese quality standards.
+
+Need a web product, an internal system, or a team that ships carefully? Visit **[field.vn](https://field.vn)**.
+
+<br clear="left">
 
 ## License
 
