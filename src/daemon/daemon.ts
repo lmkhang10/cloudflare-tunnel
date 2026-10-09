@@ -53,7 +53,8 @@ export async function runDaemon(options: DaemonOptions): Promise<number> {
       log('info', `Stopping background service: ${reason}.`);
       watchdog?.dispose(); clearTimeout(updateTimer);
       await service.stopAll().catch(error => log('error', `Stopping connectors failed: ${error.message}`));
-      await new Promise<void>(resolve => server.close(() => resolve()));
+      // Dashboards hold Server-Sent Events connections open; close them so the server can stop.
+      await new Promise<void>(resolve => { server.close(() => resolve()); server.closeAllConnections(); });
       removeDaemonInfo(options.dataDir); service.close();
       resolveExit(code); return code;
     })();

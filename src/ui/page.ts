@@ -309,7 +309,7 @@ async function fillAccountSelect(){const data=await loadAccounts();q('#account-s
 async function load(){if(!accountsCache)await loadAccounts();try{const data=await api('/api/projects');projects=data.projects||[];render()}catch(e){q('#projects').innerHTML='<div class="empty-state"><b>Could not load projects</b><p>'+esc(e.message)+'</p><button class="btn secondary" data-action="refresh">Try again</button></div>'}}
 function render(){
   const live=projects.filter(p=>p.status==='Running').length;
-  q('#summary').textContent=projects.length?(live+' of '+projects.length+' running · Saved projects stored only on this machine'):'Saved projects · stored only on this machine';
+  setText(q('#summary'),projects.length?(live+' of '+projects.length+' running · Saved projects stored only on this machine'):'Saved projects · stored only on this machine');
   q('[data-action="start-all"]').disabled=!projects.length||live===projects.length;
   q('[data-action="stop-all"]').disabled=!live;
   patchRows();
@@ -461,8 +461,20 @@ document.addEventListener('change',async e=>{const el=e.target;try{if(el.dataset
 document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(openMenu){const owner=openMenu.previousElementSibling;closeMenus();owner?.focus?.();return}if(q('#wizard').classList.contains('open')&&!running)closeWizard();else if(q('#settings').classList.contains('open'))closeSettings()});
 document.addEventListener('keydown',e=>{if(!openMenu||!['ArrowDown','ArrowUp'].includes(e.key))return;const items=qa('button',openMenu);const index=items.indexOf(document.activeElement);const nextIndex=(index+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;items[nextIndex].focus();e.preventDefault()});
 
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&token)load().then(schedulePoll)});
-api('/api/session').then(x=>{token=x.confirmationToken;load().then(schedulePoll);doctor();const params=new URLSearchParams(location.search);if(params.get('settings'))openSettings(params.get('settings'))}).catch(e=>toast(e.message,'error'));
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&token&&!streamLive)load().then(schedulePoll)});
+api('/api/session').then(x=>{token=x.confirmationToken;load().then(connectStream);doctor();const params=new URLSearchParams(location.search);if(params.get('settings'))openSettings(params.get('settings'))}).catch(e=>toast(e.message,'error'));
 /* Refresh every 10s, or every 2s while a tunnel is starting; the delay is chosen after each load. */
-function schedulePoll(){clearTimeout(schedulePoll.timer);schedulePoll.timer=setTimeout(async()=>{if(!document.hidden&&!Object.keys(busy).length&&!openMenu)await load();schedulePoll()},projects.some(p=>p.status==='Starting')?2000:10000)}
+function setText(el,value){if(el&&el.textContent!==value)el.textContent=value}
+/* Updates arrive from /api/stream only when something changes. Polling is a fallback while the stream is down. */
+let streamLive=false;
+function connectStream(){
+  if(!window.EventSource)return schedulePoll();
+  const source=new EventSource('/api/stream');
+  source.addEventListener('open',()=>{streamLive=true});
+  source.addEventListener('error',()=>{streamLive=false;schedulePoll()});
+  source.addEventListener('projects',event=>{try{projects=JSON.parse(event.data).projects||[];if(!openMenu)render()}catch{}});
+}
+function schedulePoll(){clearTimeout(schedulePoll.timer);if(streamLive)return;schedulePoll.timer=setTimeout(async()=>{if(streamLive)return;if(!document.hidden&&!Object.keys(busy).length&&!openMenu)await load();schedulePoll()},projects.some(p=>p.status==='Starting')?2000:10000)}
+/* Connector logs are not part of the stream; refresh them every 5s only while a Details panel is open. */
+setInterval(()=>{if(!document.hidden)for(const id of openDetails)renderDetails(id)},5000)
 `;

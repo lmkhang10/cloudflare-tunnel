@@ -4,7 +4,7 @@ import { app, BrowserWindow, Menu, Notification, Tray, clipboard, dialog, native
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { findDaemon, type DaemonInfo } from '../daemon/lock.js';
-import { cloudIconPng } from './icon.js';
+import { trayIconPng } from './icon.js';
 import { logoPath } from './bundle.js';
 
 const dataDir = process.env.CLOUDFLARE_TUNNEL_KIT_DATA_DIR ?? '';
@@ -25,7 +25,7 @@ let snapshot: Snapshot = { projects: [], settings: {}, autostart: {}, updates: {
 const icons = { idle: templateIcon(false), running: templateIcon(true) };
 
 function templateIcon(filled: boolean) {
-  const image = nativeImage.createFromBuffer(cloudIconPng(32, { filled }), { scaleFactor: 2 });
+  const image = nativeImage.createFromBuffer(trayIconPng(32, { filled }), { scaleFactor: 2 });
   image.setTemplateImage(true);
   return image;
 }
@@ -47,10 +47,15 @@ async function ensureDaemon(): Promise<DaemonInfo | undefined> {
 }
 
 /** The Dock icon shows while the window is open (so it can be Cmd-Tabbed) or always when the setting is on. */
+let dockVisible: boolean | undefined;
+/** Calling app.dock.show() re-activates the app on macOS, so only touch the Dock when the wanted state changes. */
 function syncDock(): void {
   if (process.platform !== 'darwin' || !app.dock) return;
   const windowVisible = Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible());
-  if (snapshot.settings.showDockIcon || windowVisible) void app.dock.show(); else app.dock.hide();
+  const wanted = Boolean(snapshot.settings.showDockIcon || windowVisible);
+  if (wanted === dockVisible) return;
+  dockVisible = wanted;
+  if (wanted) void app.dock.show(); else app.dock.hide();
 }
 
 async function openWindow(tab?: string): Promise<void> {

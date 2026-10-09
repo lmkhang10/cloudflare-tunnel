@@ -80,7 +80,7 @@ async function startForegroundUi() {
   server.once('error', error => { console.error(`Unable to start the local UI: ${error.message}`); console.error('Run `npx cf-tunnel ui` again after checking local server permissions.'); process.exitCode = 1; service.close(); });
   console.log(`Cloudflare Tunnel Kit v${packageVersion}`);
   server.listen(port, '127.0.0.1', async () => { const address = server.address(); if (!address || typeof address === 'string') return; const url = `http://127.0.0.1:${address.port}`; console.log(`UI ready at ${url}`); console.log('Tunnels stop when this command exits. Run `cftunnel ui` without --foreground to keep them running in the background.'); if (!flag('--no-open')) console.log((await launchBrowser(url)).message); });
-  process.once('SIGINT', () => server.close(async () => { await service.stopAll(); service.close(); process.exit(130); }));
+  process.once('SIGINT', () => { server.close(async () => { await service.stopAll(); service.close(); process.exit(130); }); server.closeAllConnections(); });
 }
 
 async function openUi(options: { browser?: boolean } = {}) {

@@ -91,3 +91,22 @@ test('ships page scripts that parse', async () => {
   assert.ok(scripts.length > 0);
   for (const source of scripts) assert.doesNotThrow(() => new Script(source), 'inline dashboard script must be valid JavaScript');
 });
+
+test('pushes project changes over Server-Sent Events only when they change', async () => {
+  let projects = [{ id: 'p1', status: 'Stopped' }];
+  const server = createServer({ service: { listProjects: async () => projects }, streamIntervalMs: 50 });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  const controller = new AbortController();
+  try {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/api/stream`, { signal: controller.signal });
+    assert.match(response.headers.get('content-type'), /text\/event-stream/);
+    const reader = response.body.getReader(); const decoder = new TextDecoder(); let text = '';
+    const readUntil = async pattern => { while (!pattern.test(text)) text += decoder.decode((await reader.read()).value); };
+    await readUntil(/"Stopped"/);
+    await new Promise(resolve => setTimeout(resolve, 200));
+    assert.equal(text.match(/event: projects/g).length, 1, 'no repeat while nothing changed');
+    projects = [{ id: 'p1', status: 'Running' }];
+    await readUntil(/"Running"/);
+    assert.equal(text.match(/event: projects/g).length, 2);
+  } finally { controller.abort(); server.closeAllConnections(); server.close(); }
+});

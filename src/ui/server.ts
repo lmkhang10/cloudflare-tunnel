@@ -20,9 +20,35 @@ function image(name: 'logo.png' | 'favicon.png'): Buffer | null {
   return images.get(name)!;
 }
 
-export function createServer(options: { service?: any; sessionToken?: string; maxBodyBytes?: number; version?: string; daemon?: DaemonControls } = {}): Server {
+/**
+ * Pushes the project list to dashboards over Server-Sent Events, only when it changes.
+ * One shared check runs while at least one dashboard is connected.
+ */
+function projectStream(service: any, intervalMs: number) {
+  const clients = new Set<ServerResponse>();
+  let timer: NodeJS.Timeout | undefined; let last = ''; let checking = false;
+  const send = (res: ServerResponse, payload: string) => res.write(`event: projects\ndata: ${payload}\n\n`);
+  const check = async () => {
+    if (checking) return; checking = true;
+    try { const payload = JSON.stringify({ projects: await service.listProjects() }); if (payload !== last) { last = payload; for (const res of clients) send(res, payload); } }
+    catch {} finally { checking = false; }
+  };
+  return {
+    async open(req: IncomingMessage, res: ServerResponse) {
+      res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
+      res.write('retry: 2000\n\n');
+      clients.add(res);
+      if (last) send(res, last); else await check();
+      timer ??= setInterval(() => { void check(); for (const client of clients) client.write(': keep-alive\n\n'); }, intervalMs);
+      req.on('close', () => { clients.delete(res); if (!clients.size) { clearInterval(timer); timer = undefined; last = ''; } });
+    },
+  };
+}
+
+export function createServer(options: { service?: any; sessionToken?: string; maxBodyBytes?: number; version?: string; daemon?: DaemonControls; streamIntervalMs?: number } = {}): Server {
   const service = options.service ?? emptyService; const token = options.sessionToken ?? crypto.randomUUID(); const maxBodyBytes = options.maxBodyBytes ?? 64 * 1024;
   const call = (name: string, ...args: unknown[]) => { if (typeof service[name] !== 'function') throw new Error('This feature is not available in this mode.'); return service[name](...args); };
+  const stream = projectStream(service, options.streamIntervalMs ?? 1_000);
   return httpServer(async (req, res) => {
     secureHeaders(res);
     // Every route checks Host, so a DNS-rebound page cannot read the session token from a long-running service.
@@ -30,6 +56,7 @@ export function createServer(options: { service?: any; sessionToken?: string; ma
     const url = new URL(req.url ?? '/', 'http://127.0.0.1');
     const id = (value: string) => decodeURIComponent(value);
     if (req.method === 'GET') {
+      if (url.pathname === '/api/stream') return stream.open(req, res);
       if (url.pathname === '/') return html(res, dashboardPage(options.version, { shell: url.searchParams.get('shell') === 'desktop' ? 'desktop' : 'browser', daemon: Boolean(options.daemon) }));
       if (url.pathname === '/logo.png' || url.pathname === '/favicon.png') {
         const body = image(url.pathname.slice(1) as 'logo.png' | 'favicon.png');
