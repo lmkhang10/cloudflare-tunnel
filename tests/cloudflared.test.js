@@ -90,3 +90,10 @@ test('reports an existing DNS record and overwrites it only when asked', async (
   assert.deepEqual(calls[1], ['tunnel', 'route', 'dns', '--overwrite-dns', '11111111-1111-4111-8111-111111111111', 'dev.example.com']);
   await h.dispose();
 });
+
+test('explains a missing cloudflared binary', async () => {
+  const adapter = new CloudflaredAdapter({ executable: '/nonexistent/cloudflared' });
+  const result = await adapter.version();
+  assert.equal(result.error.code, 'CLOUDFLARED_NOT_FOUND');
+  assert.match(result.error.remediationSteps[0], /brew install cloudflared/);
+});

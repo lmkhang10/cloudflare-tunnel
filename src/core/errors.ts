@@ -65,6 +65,14 @@ const definitions: Record<string, ErrorDefinition> = {
     availableActions: ['sign-in-again', 'retry', 'copy-diagnostics'],
     retryFromStep: 'dns-route',
   },
+  CLOUDFLARED_NOT_FOUND: {
+    title: 'cloudflared was not found',
+    summary: () => 'The background service could not find the cloudflared program.',
+    likelyCause: 'cloudflared is not installed, or it is installed in a folder the service does not search.',
+    remediationSteps: ['Install it with `brew install cloudflared`, or set its full path in Settings → cloudflared.', 'Then start the project again.'],
+    availableActions: ['retry', 'copy-diagnostics'],
+    retryFromStep: 'environment',
+  },
   CLOUDFLARED_COMMAND_FAILED: {
     title: 'Cloudflare command failed',
     summary: () => 'cloudflared exited before the requested operation completed.',

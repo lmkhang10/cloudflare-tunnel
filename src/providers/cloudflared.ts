@@ -31,6 +31,7 @@ export class CloudflaredAdapter {
 
   private failure(result: { exitCode: number; stderr: string }, context: { hostname?: string } = {}): { ok: false; error: TunnelError } {
     const stderr = redact(result.stderr);
+    if (/ENOENT/.test(result.stderr) && /spawn/i.test(result.stderr)) return { ok: false, error: tunnelError('CLOUDFLARED_NOT_FOUND', { exitCode: result.exitCode, stderr }) };
     if (/code: 1003|record with that host already exists/i.test(result.stderr)) return { ok: false, error: tunnelError('DNS_RECORD_EXISTS', { exitCode: result.exitCode, stderr, hostname: context.hostname }) };
     if (/origin cert(ificate)? path|locating origin cert|cert\.pem[^\n]*no such file|no such file[^\n]*cert\.pem|cannot find origin cert/i.test(result.stderr)) {
       return { ok: false, error: tunnelError('AUTH_REQUIRED', { exitCode: result.exitCode, stderr }) };

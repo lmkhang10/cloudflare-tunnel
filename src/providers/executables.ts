@@ -18,3 +18,15 @@ export function findExecutable(name: string, options: { pathEnv?: string; platfo
 function isExecutable(file: string): boolean {
   try { return statSync(file).isFile() && (accessSync(file, constants.X_OK), true); } catch { return false; }
 }
+
+/** Folders where cloudflared and node are usually installed but which GUI-launched processes do not get on PATH. */
+export function commonBinDirs(home = process.env.HOME ?? ''): string[] {
+  return ['/opt/homebrew/bin', '/usr/local/bin', home && path.join(home, '.local', 'bin'), '/usr/bin', '/bin', '/usr/sbin', '/sbin'].filter(Boolean);
+}
+
+/** PATH with the common install folders appended, keeping the caller's order first. */
+export function withCommonBinDirs(pathEnv = process.env.PATH ?? ''): string {
+  const parts = pathEnv.split(path.delimiter).filter(Boolean);
+  for (const dir of commonBinDirs()) if (!parts.includes(dir)) parts.push(dir);
+  return parts.join(path.delimiter);
+}

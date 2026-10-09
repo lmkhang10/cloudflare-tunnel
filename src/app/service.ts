@@ -14,7 +14,7 @@ import { AccountService } from './accounts.js';
 import { ActivityFeed } from './activity.js';
 import { resolveSettings, validateSettingsPatch, settingDefinitions, defaultSettings, type AppSettings } from './settings.js';
 import { createAutostartBackend, type AutostartBackend } from '../providers/autostart/index.js';
-import { findExecutable } from '../providers/executables.js';
+import { findExecutable, withCommonBinDirs } from '../providers/executables.js';
 import { UpdateService } from './updates.js';
 import { validateTunnelConfig } from '../core/validation.js';
 
@@ -48,7 +48,10 @@ export class TunnelKitService {
   }
 
   /** The cloudflared binary to run: explicit option, then the settings override, then PATH. */
-  executable(): string { return this.cloudflaredExecutable ?? (this.getSettings().cloudflaredPath || 'cloudflared'); }
+  executable(): string {
+    // Apps opened from the Dock or Finder get a minimal PATH, so also look where Homebrew and installers put cloudflared.
+    return this.cloudflaredExecutable ?? (this.getSettings().cloudflaredPath || findExecutable('cloudflared', { pathEnv: withCommonBinDirs() }) || 'cloudflared');
+  }
   connectorArgs(kind: 'quick' | 'named'): string[] {
     const settings = this.getSettings();
     // Quick Tunnels announce their URL at info level, so a quieter level would hide it.

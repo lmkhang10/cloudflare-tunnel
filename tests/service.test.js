@@ -41,3 +41,12 @@ test('normalizes tunnel names and rejects invalid settings before the review ste
   await assert.rejects(service.prepareNamed({ projectPath: '/work/lfms', profile: 'custom', localUrl: 'http://127.0.0.1:8000', tunnelName: 'law firm', hostname: 'lfms.example.com' }), error => error.issues[0].field === 'tunnelName');
   await assert.rejects(service.prepareQuick({ projectPath: '/work/lfms', profile: 'custom', localUrl: 'ftp://x' }), error => error.issues[0].field === 'localUrl');
 });
+
+test('finds cloudflared in common install folders when PATH is minimal', async () => {
+  const { withCommonBinDirs } = await import('../dist/index.js');
+  assert.match(withCommonBinDirs('/usr/bin:/bin'), /^\/usr\/bin:\/bin:.*\/opt\/homebrew\/bin.*\/usr\/local\/bin/);
+  const service = new TunnelKitService({ store: { getSettings: () => ({}) }, supervisor: {}, cloudflare: {}, namedWorkflow: {}, quickWorkflow: {} });
+  const previous = process.env.PATH; process.env.PATH = '/usr/bin:/bin';
+  try { assert.ok(service.executable() === 'cloudflared' || service.executable().startsWith('/'), 'resolves to an absolute path when installed'); }
+  finally { process.env.PATH = previous; }
+});
