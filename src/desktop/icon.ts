@@ -1,27 +1,42 @@
 import { deflateSync } from 'node:zlib';
 
 /**
- * Draws the menu bar cloud as a black-on-transparent PNG (a macOS template image).
- * `filled` marks "tunnels running"; the outline marks "idle". Generated in code so the package ships no binary assets.
+ * Draws the menu bar icon, the Field Tech "F" in a rounded square, as a black-on-transparent PNG
+ * (a macOS template image, so the system tints it for light and dark menu bars).
+ * `filled` (tunnels running) is a solid square with the F cut out; idle is an outlined square with a solid F.
+ * Generated in code so the package ships no binary tray assets.
  */
-export function cloudIconPng(size = 32, options: { filled?: boolean } = {}): Buffer {
+export function trayIconPng(size = 32, options: { filled?: boolean } = {}): Buffer {
   const scale = size / 16; const samples = 4;
   const pixels = Buffer.alloc(size * size * 4);
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     let hits = 0;
     for (let sy = 0; sy < samples; sy++) for (let sx = 0; sx < samples; sx++) {
       const px = (x + (sx + 0.5) / samples) / scale, py = (y + (sy + 0.5) / samples) / scale;
-      if (inCloud(px, py, 0) && (options.filled || !inCloud(px, py, 1.5))) hits++;
+      const square = inRoundedSquare(px, py, 0), letter = inLetterF(px, py);
+      const ink = options.filled ? square && !letter : (square && !inRoundedSquare(px, py, 1.3)) || letter;
+      if (ink) hits++;
     }
     pixels[(y * size + x) * 4 + 3] = Math.round(255 * hits / (samples * samples));
   }
   return encodePng(size, size, pixels);
 }
 
-function inCloud(x: number, y: number, inset: number): boolean {
-  const circle = (cx: number, cy: number, r: number) => (x - cx) ** 2 + (y - cy) ** 2 <= (r - inset) ** 2;
-  const body = x >= 4.6 + inset && x <= 12.4 - inset && y >= 9 && y <= 13 - inset;
-  return circle(4.6, 10, 3) || circle(8.4, 7.2, 4.2) || circle(12.2, 9.8, 3.2) || body;
+/** @deprecated The tray icon is now the Field Tech "F"; kept for API compatibility. */
+export const cloudIconPng = trayIconPng;
+
+function inRoundedSquare(x: number, y: number, inset: number): boolean {
+  const min = 1.2 + inset, max = 14.8 - inset, radius = Math.max(3.2 - inset, 0.5);
+  if (x < min || x > max || y < min || y > max) return false;
+  const cx = Math.min(Math.max(x, min + radius), max - radius), cy = Math.min(Math.max(y, min + radius), max - radius);
+  return (x - cx) ** 2 + (y - cy) ** 2 <= radius ** 2;
+}
+
+function inLetterF(x: number, y: number): boolean {
+  const stem = x >= 4.7 && x <= 6.7 && y >= 3.6 && y <= 12.5;
+  const top = x >= 4.7 && x <= 11.4 && y >= 3.6 && y <= 5.4;
+  const middle = x >= 4.7 && x <= 10.3 && y >= 7.3 && y <= 9;
+  return stem || top || middle;
 }
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
