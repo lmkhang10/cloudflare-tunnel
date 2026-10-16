@@ -58,7 +58,6 @@ ${icons}
         <div class="grid2"><div class="field"><label for="f-tunnel">Tunnel name</label><input id="f-tunnel" name="tunnelName" placeholder="my-project" autocapitalize="off" spellcheck="false"><p class="hint">Lowercase letters, numbers, and hyphens.</p></div><div class="field"><label for="f-host">Public hostname</label><input id="f-host" name="hostname" placeholder="dev.example.com"></div></div>
         <div class="field"><label for="account-select">Cloudflare account</label><select name="accountId" id="account-select"></select><p class="hint">The root domain must be managed by this account. <a href="#" data-open-settings="accounts">Manage accounts</a></p></div>
       </div>
-      <div class="field"><label for="f-profile">Project type</label><select id="f-profile" name="profile"><option value="custom">Custom</option><option value="laravel">Laravel</option></select></div>
     </div>
     <div id="review" class="hidden"><div class="review"><b>Review changes</b><ul id="effects"></ul></div><div class="notice info" id="named-notice">A custom domain setup uses the selected Cloudflare account. Existing DNS records are never overwritten automatically.</div></div>
     <div id="running" class="hidden"><div id="result" class="result-box"><span class="spinner" aria-hidden="true"></span>Running validated workflow…</div></div>
