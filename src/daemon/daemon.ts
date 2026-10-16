@@ -11,7 +11,7 @@ import { createFileLogger, type Logger } from './logger.js';
 import { ConnectorWatchdog } from './watchdog.js';
 import { launchTray, runtimeStatus } from '../desktop/runtime.js';
 import { appBundleBinary } from '../desktop/bundle.js';
-import { withCommonBinDirs } from '../providers/executables.js';
+import { withCommonBinDirs, withSystemResolver } from '../providers/executables.js';
 
 export interface DaemonOptions { dataDir: string; version: string; nodePath: string; cliPath: string; port?: number; tray?: boolean; echo?: boolean; }
 
@@ -33,6 +33,7 @@ export async function runDaemon(options: DaemonOptions): Promise<number> {
   try { process.chdir(os.homedir()); } catch {}
   // Started from the Dock or launchd, the service inherits a minimal PATH; every connector it spawns needs the usual folders.
   process.env.PATH = withCommonBinDirs(process.env.PATH);
+  process.env.GODEBUG = withSystemResolver();
   const env = process.env.CLOUDFLARE_TUNNEL_KIT_DATA_DIR ? { CLOUDFLARE_TUNNEL_KIT_DATA_DIR: process.env.CLOUDFLARE_TUNNEL_KIT_DATA_DIR } : undefined;
   const service = createTunnelKitService({ dataDir: options.dataDir, version: options.version, runtime: { nodePath: options.nodePath, cliPath: options.cliPath, env } });
   const settings = service.getSettings();

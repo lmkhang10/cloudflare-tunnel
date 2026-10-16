@@ -50,3 +50,11 @@ test('finds cloudflared in common install folders when PATH is minimal', async (
   try { assert.ok(service.executable() === 'cloudflared' || service.executable().startsWith('/'), 'resolves to an absolute path when installed'); }
   finally { process.env.PATH = previous; }
 });
+
+test('cloudflared uses the macOS system resolver unless GODEBUG already picks one', async () => {
+  const { withSystemResolver } = await import('../dist/index.js');
+  assert.equal(withSystemResolver('', 'darwin'), 'netdns=cgo');
+  assert.equal(withSystemResolver('http2debug=1', 'darwin'), 'http2debug=1,netdns=cgo');
+  assert.equal(withSystemResolver('netdns=go', 'darwin'), 'netdns=go');
+  assert.equal(withSystemResolver('', 'linux'), '');
+});

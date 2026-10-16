@@ -13,8 +13,11 @@ import { pidAlive } from '../daemon/lock.js';
 import { installRuntime, launchTray, runtimeStatus, ELECTRON_VERSION } from '../desktop/runtime.js';
 import { appBundleBinary, appBundlePath, bundleIsCurrent, installAppBundle } from '../desktop/bundle.js';
 import { createAutostartBackend } from '../providers/autostart/index.js';
+import { withSystemResolver } from '../providers/executables.js';
 
 const args = process.argv.slice(2); const command = args[0] ?? 'launch';
+// Foreground commands spawn cloudflared too; give it the system resolver like the daemon does.
+process.env.GODEBUG = withSystemResolver();
 const packageVersion = (JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { version: string }).version;
 const cliPath = fileURLToPath(import.meta.url); const nodePath = process.execPath;
 const dataDir = resolveDataDir(); const paths = appPathsFor(dataDir);

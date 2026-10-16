@@ -30,3 +30,13 @@ export function withCommonBinDirs(pathEnv = process.env.PATH ?? ''): string {
   for (const dir of commonBinDirs()) if (!parts.includes(dir)) parts.push(dir);
   return parts.join(path.delimiter);
 }
+
+/**
+ * GODEBUG that makes cloudflared resolve names through the macOS system resolver.
+ * Go's own resolver only asks the nameservers over UDP, so on networks that drop UDP port 53
+ * `cloudflared tunnel info/create/route` time out; the system resolver falls back to TCP.
+ */
+export function withSystemResolver(godebug = process.env.GODEBUG ?? '', platform = process.platform): string {
+  if (platform !== 'darwin' || /(^|,)netdns=/.test(godebug)) return godebug;
+  return godebug ? `${godebug},netdns=cgo` : 'netdns=cgo';
+}
