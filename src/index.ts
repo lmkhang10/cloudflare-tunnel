@@ -15,6 +15,7 @@ export * from './persistence/database.js';
 export * from './persistence/store.js';
 export * from './providers/command-runner.js';
 export * from './providers/cloudflared.js';
+export * from './providers/cloudflare-dns.js';
 export * from './providers/git-safety.js';
 export * from './providers/process-supervisor.js';
 export * from './providers/browser.js';

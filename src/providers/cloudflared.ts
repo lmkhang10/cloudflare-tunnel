@@ -94,6 +94,14 @@ export class CloudflaredAdapter {
     return result.exitCode === 0 ? { ok: true, value: { hostname } } : this.failure(result, { hostname });
   }
 
+  /** `-f` clears stale connections first. A tunnel that no longer exists counts as deleted. */
+  async deleteTunnel(tunnel: string): Promise<Result<{ deleted: true; alreadyGone: boolean }>> {
+    const result = await this.tunnel(['delete', '-f', tunnel]);
+    if (result.exitCode === 0) return { ok: true, value: { deleted: true, alreadyGone: false } };
+    if (/not found|does not exist|doesn't exist/i.test(result.stderr)) return { ok: true, value: { deleted: true, alreadyGone: true } };
+    return this.failure(result);
+  }
+
   async info(tunnel: string): Promise<Result<{ connectorState: 'healthy' | 'degraded' | 'disconnected' | 'unknown' }>> {
     const result = await this.tunnel(['info', '--output', 'json', tunnel]);
     if (result.exitCode !== 0) return this.failure(result);

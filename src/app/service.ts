@@ -8,6 +8,7 @@ import { openStateDatabase } from '../persistence/database.js';
 import { StateStore } from '../persistence/store.js';
 import { ProcessSupervisor } from '../providers/process-supervisor.js';
 import { CloudflaredAdapter } from '../providers/cloudflared.js';
+import { CloudflareDnsClient } from '../providers/cloudflare-dns.js';
 import { QuickTunnelWorkflow } from '../core/quick-workflow.js';
 import { NamedTunnelWorkflow } from '../core/named-workflow.js';
 import { AccountService } from './accounts.js';
@@ -65,7 +66,7 @@ export class TunnelKitService {
       let session: any; try { session = this.store.getLatestSession(project.id); } catch {}
       const observed = session ? this.supervisor.status(session.processKey) : { state: 'stopped', logs: '' };
       const status = this.starting.has(project.id) ? 'Starting' : !existsSync(project.path) ? 'Needs attention' : observed.state === 'running' ? 'Running' : 'Stopped';
-      return { ...project, status, kind: tunnel?.kind, hostname: tunnel?.hostname, localUrl: tunnel?.localUrl, publicUrl: session?.ephemeralUrlExpired ? undefined : session?.ephemeralUrl ?? (observed.state === 'running' && tunnel?.hostname ? `https://${tunnel.hostname}` : undefined), processState: observed.state, accountId: tunnel?.accountId, accountLabel: tunnel?.accountId ? labels.get(tunnel.accountId) : undefined, hasTunnel: Boolean(tunnel?.uuid) };
+      return { ...project, status, kind: tunnel?.kind, hostname: tunnel?.hostname, tunnelName: tunnel?.name, localUrl: tunnel?.localUrl, publicUrl: session?.ephemeralUrlExpired ? undefined : session?.ephemeralUrl ?? (observed.state === 'running' && tunnel?.hostname ? `https://${tunnel.hostname}` : undefined), processState: observed.state, accountId: tunnel?.accountId, accountLabel: tunnel?.accountId ? labels.get(tunnel.accountId) : undefined, hasTunnel: Boolean(tunnel?.uuid) };
     });
   }
 
@@ -127,6 +128,12 @@ export class TunnelKitService {
     if (tunnel?.kind !== 'named') throw new Error('Only custom-domain projects have a DNS record.');
     return this.track('named', () => this.namedWorkflow.retry(projectId, { replaceDns: true }));
   }
+  /** Deletes a leftover Cloudflare tunnel that has this project's tunnel name, then creates a fresh one. Only called after the user confirms. */
+  async replaceTunnel(projectId: string): Promise<any> {
+    const tunnel = this.store.getTunnelForProject(projectId);
+    if (tunnel?.kind !== 'named') throw new Error('Only custom-domain projects have a Cloudflare tunnel.');
+    return this.track('named', () => this.namedWorkflow.retry(projectId, { replaceTunnel: true }));
+  }
   async restart(projectId: string): Promise<any> { try { await this.stop(projectId); } catch {} return this.start(projectId); }
 
   private async track(kind: 'quick' | 'named', operation: () => Promise<any>): Promise<any> {
@@ -176,6 +183,56 @@ export class TunnelKitService {
     if (duplicate) throw new Error('Another local project already uses this folder.');
     this.store.relinkProject(projectId, resolved);
   }
+  /**
+   * Edits a saved project. Cloudflare cannot rename a tunnel, so the tunnel name only changes before the tunnel exists.
+   * A running connector restarts with the new settings; a replaced hostname has its old DNS record removed.
+   */
+  async updateProject(projectId: string, raw: { displayName?: unknown; localUrl?: unknown; hostname?: unknown; tunnelName?: unknown }): Promise<any> {
+    const project = this.store.getProject(projectId); const tunnel = this.store.getTunnelForProject(projectId);
+    const text = (value: unknown) => typeof value === 'string' ? value.trim() : undefined;
+    const displayName = text(raw.displayName);
+    if (raw.displayName !== undefined && (!displayName || displayName.length > 80)) throw Object.assign(new Error('A project name of 1-80 characters is required.'), { issues: [{ code: 'INPUT_DISPLAY_NAME_REQUIRED', field: 'displayName', reason: 'A project name of 1-80 characters is required.', fix: 'Enter a short name.' }] });
+    const named = tunnel?.kind === 'named';
+    const localUrl = text(raw.localUrl) ?? tunnel?.localUrl ?? '';
+    const hostname = named ? (text(raw.hostname)?.toLowerCase().replace(/^https?:\/\//, '').replace(/[/?#].*$/, '') ?? tunnel?.hostname) : undefined;
+    const tunnelName = named ? (text(raw.tunnelName)?.toLowerCase() ?? tunnel?.name) : undefined;
+    if (named && tunnel?.uuid && tunnelName !== tunnel.name) throw Object.assign(new Error('Cloudflare cannot rename an existing tunnel. Keep the tunnel name, or delete the project and create it again.'), { issues: [{ code: 'TUNNEL_RENAME_UNSUPPORTED', field: 'tunnelName', reason: 'Cloudflare cannot rename an existing tunnel.', fix: 'Keep the current tunnel name.' }] });
+    if (tunnel) {
+      const validation = validateTunnelConfig({ profile: project.profile, operation: named ? 'create' : 'quick', localUrl, tunnelName, hostname, projectRoot: project.path });
+      if (!validation.ok) throw Object.assign(new Error(`${validation.issues[0].reason} ${validation.issues[0].fix}`), { issues: validation.issues });
+    }
+    if (displayName && displayName !== project.displayName) this.store.renameProject(projectId, displayName);
+    const changed = Boolean(tunnel) && (localUrl !== tunnel!.localUrl || hostname !== tunnel!.hostname || tunnelName !== tunnel!.name);
+    const warnings: string[] = []; let result: any; let dns: any;
+    if (changed) {
+      this.store.saveTunnel({ ...tunnel!, localUrl, hostname, name: tunnelName });
+      if (this.runningProjectIds().includes(projectId)) result = await this.restart(projectId);
+      if (named && tunnel!.uuid && tunnel!.hostname && hostname !== tunnel!.hostname) {
+        dns = await this.namedWorkflow.deleteDnsRecord(tunnel!.accountId, tunnel!.hostname, tunnel!.uuid);
+        if (dns.state === 'failed' || dns.state === 'skipped') warnings.push(dns.detail);
+      }
+    }
+    return { project: (await this.listProjects()).find(item => item.id === projectId), restarted: Boolean(result), result, dns, warnings };
+  }
+
+  /** Stops the connector, deletes the Cloudflare tunnel and its DNS record, then removes the local project. */
+  async deleteProject(projectId: string): Promise<any> {
+    this.store.getProject(projectId);
+    if (this.runningProjectIds().includes(projectId)) await this.stop(projectId);
+    const tunnel = this.store.getTunnelForProject(projectId);
+    const warnings: string[] = []; let cloudflare: any;
+    if (tunnel?.kind === 'named' && tunnel.uuid) {
+      cloudflare = await this.track('named', () => this.namedWorkflow.removeResources(projectId));
+      if (cloudflare.dns && ['failed', 'skipped'].includes(cloudflare.dns.state)) warnings.push(cloudflare.dns.detail);
+      if (cloudflare.state === 'failed') {
+        const error = cloudflare.error ?? {};
+        throw Object.assign(new Error(`Could not delete the Cloudflare tunnel: ${error.summary ?? error.reason ?? error.code ?? 'unknown error'}. The project was kept. Try again, or use Remove local only.`), { code: error.code });
+      }
+    }
+    this.store.removeProject(projectId);
+    return { deleted: true, tunnelDeleted: Boolean(cloudflare?.tunnelDeleted), dns: cloudflare?.dns, warnings };
+  }
+
   async removeLocal(projectId: string): Promise<void> {
     let session; try { session = this.store.getLatestSession(projectId); } catch {}
     if (session && this.supervisor.status(session.processKey).state === 'running') throw new Error('Stop the connector before removing this project from the local dashboard.');
@@ -249,6 +306,7 @@ export function createTunnelKitService(options: { dataDir?: string; cloudflaredE
     store, supervisor, projectsDir: paths.projectsDir, executable, runArgs: () => service?.connectorArgs('named') ?? [],
     cloudflareFor: accountId => adapter(accounts.certPathFor(accountId)),
     credentialsFileFor: (accountId, tunnelName) => accounts.credentialsFileFor(accountId, tunnelName),
+    dnsFor: accountId => new CloudflareDnsClient({ certPath: accounts.certPathFor(accountId) ?? process.env.TUNNEL_ORIGIN_CERT ?? path.join(os.homedir(), '.cloudflared', 'cert.pem') }),
   });
   const runtime = options.runtime ? { ...options.runtime, logsDir: paths.logsDir } : undefined;
   const updates = runtime && options.version ? new UpdateService({

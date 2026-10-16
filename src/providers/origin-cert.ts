@@ -22,6 +22,20 @@ export function readOriginCertIdentity(file: string): OriginCertIdentity {
   try { return parseOriginCert(readFileSync(file, 'utf8')); } catch { return {}; }
 }
 
+/**
+ * The zone-scoped API token cloudflared itself uses for DNS routes. Only the DNS cleanup client calls this;
+ * the token is sent to api.cloudflare.com and never stored, returned to the UI, or logged.
+ */
+export function readOriginCertApiToken(file: string): (OriginCertIdentity & { apiToken?: string }) {
+  try {
+    const pem = readFileSync(file, 'utf8');
+    const block = pem.match(/-----BEGIN ARGO TUNNEL TOKEN-----([\s\S]*?)-----END ARGO TUNNEL TOKEN-----/)?.[1];
+    if (!block) return {};
+    const decoded = JSON.parse(Buffer.from(block.replace(/\s+/g, ''), 'base64').toString('utf8')) as { apiToken?: unknown };
+    return { ...parseOriginCert(pem), apiToken: typeof decoded.apiToken === 'string' && decoded.apiToken ? decoded.apiToken : undefined };
+  } catch { return {}; }
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The tunnel id recorded by `cloudflared tunnel create` in its credentials file; the secret is not read out. */

@@ -100,10 +100,13 @@ export function createServer(options: { service?: any; sessionToken?: string; ma
         const accountId = id(account[1]);
         return handle(res, async () => account[2] === 'verify' ? call('verifyAccount', accountId) : account[2] === 'rename' ? call('renameAccount', accountId, body.label) : account[2] === 'default' ? call('setDefaultAccount', accountId) : (call('removeAccount', accountId), { removed: true }));
       }
-      const action = url.pathname.match(/^\/api\/projects\/([^/]+)\/(start|stop|retry|restart|replace-dns)$/);
-      if (action) return handle(res, () => action[2] === 'replace-dns' ? call('replaceDns', id(action[1])) : service[action[2]](id(action[1])));
-      const management = url.pathname.match(/^\/api\/projects\/([^/]+)\/(relink|remove-local|settings)$/);
-      if (management) return handle(res, () => management[2] === 'relink' ? service.relinkProject(id(management[1]), body.path) : management[2] === 'settings' ? call('updateProjectSettings', id(management[1]), body) : service.removeLocal(id(management[1])));
+      const action = url.pathname.match(/^\/api\/projects\/([^/]+)\/(start|stop|retry|restart|replace-dns|replace-tunnel)$/);
+      if (action) return handle(res, () => action[2] === 'replace-dns' ? call('replaceDns', id(action[1])) : action[2] === 'replace-tunnel' ? call('replaceTunnel', id(action[1])) : service[action[2]](id(action[1])));
+      const management = url.pathname.match(/^\/api\/projects\/([^/]+)\/(relink|remove-local|settings|update|delete)$/);
+      if (management) {
+        const projectId = id(management[1]);
+        return handle(res, () => management[2] === 'relink' ? service.relinkProject(projectId, body.path) : management[2] === 'settings' ? call('updateProjectSettings', projectId, body) : management[2] === 'update' ? call('updateProject', projectId, body) : management[2] === 'delete' ? call('deleteProject', projectId) : service.removeLocal(projectId));
+      }
       if (url.pathname === '/api/plan') {
         const config = body.config ?? {}; return handle(res, async () => ({ plan: config.operation === 'quick' ? await service.prepareQuick({ projectPath: config.projectRoot ?? process.cwd(), ...config }) : await service.prepareNamed({ projectPath: config.projectRoot ?? process.cwd(), ...config }) }));
       }

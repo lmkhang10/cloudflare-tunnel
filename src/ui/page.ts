@@ -65,6 +65,19 @@ ${icons}
   <div class="drawer-foot"><button class="btn ghost" data-close>Cancel</button><button class="btn primary" id="continue">Review changes</button></div>
 </section></div>
 
+<div id="edit" class="drawer" aria-hidden="true"><div class="drawer-overlay" data-close-edit></div><section class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="edit-title" tabindex="-1">
+  <div class="drawer-head"><div><h2 id="edit-title">Edit project</h2><p class="muted" id="edit-subtitle">A running tunnel restarts with the new settings.</p></div><button class="close" data-close-edit aria-label="Close"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
+  <div class="drawer-body"><form id="edit-form" novalidate>
+    <div class="field"><label for="e-name">Project name</label><input id="e-name" name="displayName" required maxlength="80"></div>
+    <div class="field"><label for="e-url">Local application URL</label><input id="e-url" name="localUrl" required placeholder="http://127.0.0.1:8000"><p class="hint">Change the port here if the app runs somewhere else.</p></div>
+    <div id="edit-named" class="hidden">
+      <div class="field"><label for="e-host">Public hostname</label><input id="e-host" name="hostname" autocapitalize="off" spellcheck="false"><p class="hint">The old DNS record is deleted and the new one is created on the next start.</p></div>
+      <div class="field"><label for="e-tunnel">Tunnel name</label><input id="e-tunnel" name="tunnelName" autocapitalize="off" spellcheck="false"><p class="hint" id="e-tunnel-hint">Lowercase letters, numbers, and hyphens.</p></div>
+    </div>
+  </form></div>
+  <div class="drawer-foot"><button class="btn ghost" data-close-edit>Cancel</button><button class="btn primary" id="edit-save">Save changes</button></div>
+</section></div>
+
 <div id="settings" class="drawer" aria-hidden="true"><div class="drawer-overlay" data-close-settings></div><section class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1">
   <div class="drawer-head"><div><h2 id="settings-title">Settings</h2><p class="muted">${options.daemon ? 'Saved on this machine and applied by the background service.' : 'Foreground mode: tunnels stop when this terminal closes. Run cftunnel daemon start to keep them running.'}</p></div><button class="close" data-close-settings aria-label="Close settings"><svg class="i" aria-hidden="true"><use href="#i-x"/></svg></button></div>
   <nav class="tabs" id="settings-tabs" role="tablist"></nav>
@@ -279,6 +292,7 @@ const icons = String.raw`<svg width="0" height="0" style="position:absolute" ari
 <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></symbol>
 <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
 <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol>
+<symbol id="i-edit" viewBox="0 0 24 24"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></symbol>
 <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
 <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0zM12 9v4M12 17h.01"/></symbol>
@@ -343,7 +357,7 @@ function row(p){
   const isRunning=p.status==='Running',dot=isRunning?'ok':projectErrors[p.id]?'bad':p.status==='Needs attention'?'warn':'';
   const url=p.publicUrl?'<a href="'+esc(p.publicUrl)+'" target="_blank" rel="noreferrer">'+esc(p.publicUrl.replace(/^https?:\/\//,''))+'</a><button class="copy" data-copy-url="'+esc(p.publicUrl)+'" aria-label="Copy URL" title="Copy URL">'+icon('copy')+'</button><span class="arrow">→</span>':(p.kind==='named'&&p.hostname?'<span>'+esc(p.hostname)+'</span><span class="arrow">→</span>':'');
   const action=busy[p.id]||p.status==='Starting'?'<button class="btn secondary sm" disabled>'+esc(busy[p.id]||'Starting…')+'</button>':isRunning?'<button class="btn secondary sm" data-project="'+esc(p.id)+'" data-command="stop">'+icon('stop')+'Stop</button>':'<button class="btn primary sm" data-project="'+esc(p.id)+'" data-command="start">'+icon('play')+'Start</button>';
-  const failure=projectErrors[p.id]&&!isRunning?'<div class="notice danger" role="alert"><b>'+esc(projectErrors[p.id].title)+'</b>'+esc(projectErrors[p.id].detail)+(projectErrors[p.id].code==='DNS_RECORD_EXISTS'?'<div class="row-actions" style="margin-top:8px"><button class="btn danger sm" data-project="'+esc(p.id)+'" data-command="replace-dns">Replace DNS record</button></div>':'')+'</div>':'';
+  const failure=projectErrors[p.id]&&!isRunning?'<div class="notice danger" role="alert"><b>'+esc(projectErrors[p.id].title)+'</b>'+esc(projectErrors[p.id].detail)+(projectErrors[p.id].code==='DNS_RECORD_EXISTS'?'<div class="row-actions" style="margin-top:8px"><button class="btn danger sm" data-project="'+esc(p.id)+'" data-command="replace-dns">Replace DNS record</button></div>':projectErrors[p.id].code==='TUNNEL_NAME_CONFLICT'?'<div class="row-actions" style="margin-top:8px"><button class="btn danger sm" data-project="'+esc(p.id)+'" data-command="replace-tunnel">Replace old tunnel</button><button class="btn secondary sm" data-action="edit" data-project="'+esc(p.id)+'">Edit tunnel name</button></div>':'')+'</div>':'';
   return '<article class="row" data-row="'+esc(p.id)+'">'
    +'<div class="row-main"><i class="dot '+dot+'"></i><div class="row-text"><div class="row-title"><b>'+esc(p.displayName)+'</b><span class="tag">'+(p.kind==='named'?'Custom domain':'Quick Tunnel')+'</span>'+(p.accountLabel?'<span class="tag">'+esc(p.accountLabel)+'</span>':'')+'</div>'
    +'<div class="row-meta">'+url+'<code>'+esc(p.localUrl||p.path)+'</code></div></div></div>'
@@ -356,13 +370,18 @@ function rowMenu(p){const isRunning=p.status==='Running';return '<div class="men
   +'<button role="menuitem" data-project="'+esc(p.id)+'" data-command="retry">'+icon('refresh')+'<span>Retry setup</span></button>'
   +'<button role="menuitem" data-action="details" data-project="'+esc(p.id)+'">'+icon('info')+'<span>'+(openDetails.has(p.id)?'Hide details':'Details')+'</span></button>'
   +(p.publicUrl?'<button role="menuitem" data-open-url="'+esc(p.publicUrl)+'">'+icon('external')+'<span>Open public URL</span></button>':'')
-  +'<hr><button role="menuitem" class="danger" data-project="'+esc(p.id)+'" data-command="remove-local">'+icon('trash')+'<span>Remove local<small>Cloudflare resources are kept</small></span></button></div>'}
+  +'<button role="menuitem" data-action="edit" data-project="'+esc(p.id)+'">'+icon('edit')+'<span>Edit</span></button>'
+  +'<hr><button role="menuitem" class="danger" data-project="'+esc(p.id)+'" data-command="delete">'+icon('trash')+'<span>Delete'+(p.kind==='named'&&p.hasTunnel?'<small>Also deletes the tunnel and DNS record</small>':'')+'</span></button>'
+  +(p.kind==='named'&&p.hasTunnel?'<button role="menuitem" class="danger" data-project="'+esc(p.id)+'" data-command="remove-local">'+icon('x')+'<span>Remove local only<small>Cloudflare resources are kept</small></span></button>':'')+'</div>'}
 
 async function runCommand(id,command){
-  if(command==='remove-local'&&!confirm('Remove this project from the local dashboard? Cloudflare tunnel and DNS resources will not be deleted.'))return;
+  const target=projects.find(x=>x.id===id)||{};
+  if(command==='delete'&&!confirm(target.kind==='named'&&target.hasTunnel?'Delete '+(target.displayName||'this project')+'? The connector stops, and the Cloudflare tunnel'+(target.hostname?' and the DNS record for '+target.hostname:'')+' are deleted, so the same names can be used again.':'Delete '+(target.displayName||'this project')+'?'))return;
+  if(command==='remove-local'&&!confirm('Remove this project from the local dashboard only? The Cloudflare tunnel and DNS record are kept, so the same tunnel name cannot be reused until they are deleted.'))return;
+  if(command==='replace-tunnel'&&!confirm('Delete the existing Cloudflare tunnel named '+(target.tunnelName||'like this one')+' and create a new one? Anything still using that tunnel stops working.'))return;
   if(command==='replace-dns'&&!confirm('Replace the existing DNS record for '+((projects.find(x=>x.id===id)||{}).hostname||'this hostname')+'? It will point to the tunnel of this project; whatever it pointed to before stops receiving traffic.'))return;
-  busy[id]={start:'Starting…',stop:'Stopping…',retry:'Retrying…',restart:'Restarting…','remove-local':'Removing…','replace-dns':'Updating DNS…'}[command]||'Working…';delete projectErrors[id];render();
-  try{const result=await api('/api/projects/'+encodeURIComponent(id)+'/'+command,{method:'POST',body:'{}'});if(result&&result.state==='failed'){projectErrors[id]=describeError(result.error);toast(projectErrors[id].title,'error')}else if(['start','restart','retry','replace-dns'].includes(command))toast('Tunnel is running')}
+  busy[id]={start:'Starting…',stop:'Stopping…',retry:'Retrying…',restart:'Restarting…','remove-local':'Removing…','delete':'Deleting…','replace-dns':'Updating DNS…','replace-tunnel':'Replacing tunnel…'}[command]||'Working…';delete projectErrors[id];render();
+  try{const result=await api('/api/projects/'+encodeURIComponent(id)+'/'+command,{method:'POST',body:'{}'});if(result&&result.state==='failed'){projectErrors[id]=describeError(result.error);toast(projectErrors[id].title,'error')}else if(command==='delete'){delete projectErrors[id];openDetails.delete(id);toast(result&&result.warnings&&result.warnings.length?'Deleted. '+result.warnings.join(' '):'Project deleted',result&&result.warnings&&result.warnings.length?'error':'',result&&result.warnings&&result.warnings.length?10000:0)}else if(['start','restart','retry','replace-dns','replace-tunnel'].includes(command))toast('Tunnel is running')}
   catch(err){projectErrors[id]={title:err.message,detail:''};toast(err.message,'error')}
   finally{delete busy[id];await load()}
 }
@@ -382,6 +401,15 @@ async function renderDetails(id){
   catch(e){box.innerHTML='<div class="notice danger">'+esc(e.message)+'</div>'}
 }
 function toggleDetails(id){if(openDetails.has(id)){openDetails.delete(id);const box=q('[data-details="'+CSS.escape(id)+'"]');if(box){box.classList.add('hidden');box.innerHTML='';box._html=''}}else{openDetails.add(id);renderDetails(id)}}
+
+/* ---------- edit ---------- */
+let editId=null;
+async function openEdit(id,trigger){closeMenus();const p=projects.find(x=>x.id===id);if(!p)return;let tunnel={};try{tunnel=(await api('/api/projects/'+encodeURIComponent(id))).tunnel||{}}catch{}editId=id;const f=q('#edit-form');f.reset();qa('#edit-form .field-error').forEach(el=>el.remove());qa('#edit-form [aria-invalid]').forEach(el=>el.setAttribute('aria-invalid','false'));const named=p.kind==='named';f.displayName.value=p.displayName||'';f.localUrl.value=p.localUrl||tunnel.localUrl||'';f.hostname.value=tunnel.hostname||p.hostname||'';f.tunnelName.value=tunnel.name||'';f.tunnelName.disabled=Boolean(tunnel.uuid);q('#e-tunnel-hint').textContent=tunnel.uuid?'Cloudflare cannot rename an existing tunnel.':'Lowercase letters, numbers, and hyphens.';q('#edit-named').classList.toggle('hidden',!named);q('#edit-subtitle').textContent=p.status==='Running'?'Saving restarts the running tunnel with the new settings.':'Changes apply the next time the tunnel starts.';const d=q('#edit');d._trigger=trigger;d.classList.add('open');d.setAttribute('aria-hidden','false');document.body.style.overflow='hidden';setTimeout(()=>f.localUrl.focus(),250)}
+function closeEdit(){const d=q('#edit');if(!d.classList.contains('open')||q('#edit-save').disabled)return;d.classList.remove('open');d.setAttribute('aria-hidden','true');document.body.style.overflow='';if(d._trigger&&d._trigger.focus&&document.contains(d._trigger))d._trigger.focus();editId=null}
+async function saveEdit(){const f=q('#edit-form'),p=projects.find(x=>x.id===editId);if(!p)return closeEdit();const body={displayName:f.displayName.value,localUrl:f.localUrl.value};if(p.kind==='named'){body.hostname=f.hostname.value;if(!f.tunnelName.disabled)body.tunnelName=f.tunnelName.value}qa('#edit-form .field-error').forEach(el=>el.remove());const button=q('#edit-save');button.disabled=true;button.innerHTML='<span class="spinner" aria-hidden="true"></span>Saving…';const id=editId;busy[id]='Saving…';render();
+  try{const r=await api('/api/projects/'+encodeURIComponent(id)+'/update',{method:'POST',body:JSON.stringify(body)});delete projectErrors[id];if(r.result&&r.result.state==='failed'){projectErrors[id]=describeError(r.result.error);toast('Saved, but the restart failed: '+projectErrors[id].title,'error')}else if(r.warnings&&r.warnings.length)toast('Saved. '+r.warnings.join(' '),'error',10000);else toast(r.restarted?'Saved and restarted':'Saved');button.disabled=false;closeEdit()}
+  catch(err){for(const issue of err.issues||[]){const el=issue.field&&f.elements[issue.field];if(el){el.setAttribute('aria-invalid','true');const hint=document.createElement('p');hint.className='hint field-error';hint.textContent=issue.reason+' '+issue.fix;el.parentElement.append(hint)}}toast(err.message,'error')}
+  finally{button.disabled=false;button.textContent='Save changes';delete busy[id];await load()}}
 
 /* ---------- environment ---------- */
 const checkFixes={'cloudflared':['cloudflared','Set the cloudflared path'],'Cloudflare accounts':['accounts','Connect an account'],'Launch at login':['general','Turn on']};
@@ -439,6 +467,7 @@ async function saveSetting(el){const key=el.dataset.setting;const value=el.type=
 /* ---------- events ---------- */
 document.addEventListener('click',async e=>{
   if(canClose(e.target)){closeWizard();return}
+  if(e.target.closest?.('[data-close-edit]')){e.preventDefault();return closeEdit()}
   const t=e.target.closest('button,a');
   if(openMenu&&!e.target.closest('.menu')&&!(t&&(t.dataset.rowMenu||t.dataset.action==='new-menu')))closeMenus();
   if(!t)return;
@@ -452,12 +481,14 @@ document.addEventListener('click',async e=>{
   if(t.dataset.action==='doctor')return doctor(true);
   if(t.dataset.action==='start-all'||t.dataset.action==='stop-all'){t.disabled=true;try{await api('/api/projects/'+t.dataset.action,{method:'POST',body:'{}'})}catch(err){toast(err.message,'error')}return load()}
   if(t.dataset.action==='details'&&t.dataset.project){closeMenus();return toggleDetails(t.dataset.project)}
+  if(t.dataset.action==='edit'&&t.dataset.project)return openEdit(t.dataset.project,q('[data-row-menu="'+CSS.escape(t.dataset.project)+'"]'));
+  if(t.id==='edit-save'){e.preventDefault();return saveEdit()}
   if(t.dataset.project&&t.dataset.command){closeMenus();return runCommand(t.dataset.project,t.dataset.command)}
 });
 document.addEventListener('click',async e=>{const el=e.target.closest?.('[data-action="settings"],[data-open-settings],[data-settings-tab],[data-close-settings],[data-account],[data-import],[data-import-all],[data-update],[data-autostart-repair],[data-service]');if(!el)return;if(el.matches('[data-close-settings]')){closeSettings();return}e.preventDefault();try{if(el.dataset.action==='settings')return openSettings('general',el);if(el.dataset.openSettings){if(q('#wizard').classList.contains('open')&&!running)closeWizard();return openSettings(el.dataset.openSettings,el)}if(el.dataset.settingsTab){settingsTab=el.dataset.settingsTab;return renderSettings()}if(el.dataset.account)return accountAction(el.dataset.account,el.dataset.id,el);if(el.dataset.import){await api('/api/accounts/import',{method:'POST',body:JSON.stringify({candidateId:el.dataset.import})});toast('Account imported');accountsCache=null;return renderSettings()}if(el.hasAttribute('data-import-all')){for(const b of qa('[data-import]'))await api('/api/accounts/import',{method:'POST',body:JSON.stringify({candidateId:b.dataset.import})});toast('Accounts imported');accountsCache=null;return renderSettings()}if(el.dataset.update==='check'){el.disabled=true;await api('/api/updates/check',{method:'POST',body:'{}'});return renderSettings()}if(el.dataset.update==='install'){if(!confirm('Install the update now? Running tunnels restart and reconnect in a few seconds.'))return;el.disabled=true;await api('/api/updates/install',{method:'POST',body:'{}'});toast('Update installed. Reconnecting…');setTimeout(()=>location.reload(),6000);return}if(el.hasAttribute('data-autostart-repair')){await api('/api/autostart',{method:'POST',body:JSON.stringify({enabled:true})});toast('Launch at login repaired');return renderSettings()}if(el.dataset.service==='shutdown'){if(!confirm('Stop the background service? All running tunnels will stop.'))return;await api('/api/daemon/shutdown',{method:'POST',body:'{}'});toast('Background service stopped')}}catch(err){toast(err.message,'error');renderSettings()}});
 document.addEventListener('input',e=>{const el=e.target;if(el.name==='tunnelName'){const clean=el.value.toLowerCase().replace(/[^a-z0-9-]/g,'-');if(clean!==el.value)el.value=clean;el.dataset.edited='true'}if(el.name==='displayName'){const tunnel=q('[name=tunnelName]');if(tunnel&&!tunnel.dataset.edited)tunnel.value=slug(el.value)}if(el.getAttribute('aria-invalid')==='true'){el.setAttribute('aria-invalid','false');el.parentElement.querySelector('.field-error')?.remove()}});
 document.addEventListener('change',async e=>{const el=e.target;try{if(el.dataset.setting)return saveSetting(el);if(el.hasAttribute('data-autostart')){await api('/api/autostart',{method:'POST',body:JSON.stringify({enabled:el.checked})});toast(el.checked?'Launch at login turned on':'Launch at login turned off');return renderSettings()}if(el.dataset.autostartProject){await api('/api/projects/'+encodeURIComponent(el.dataset.autostartProject)+'/settings',{method:'POST',body:JSON.stringify({autoStart:el.checked})});toast(el.checked?'Starts with the service':'Auto-start off');const p=projects.find(x=>x.id===el.dataset.autostartProject);if(p)p.autoStart=el.checked;return}if(el.dataset.projectAccount){const id=el.dataset.projectAccount;const body={accountId:el.value};try{await api('/api/projects/'+encodeURIComponent(id)+'/settings',{method:'POST',body:JSON.stringify(body)})}catch(err){if(!/Confirm/.test(err.message))throw err;if(!confirm(err.message+' Continue?')){el.value=el.dataset.current;return}await api('/api/projects/'+encodeURIComponent(id)+'/settings',{method:'POST',body:JSON.stringify({...body,confirmNewTunnel:true})})}toast('Account updated. Start the project to create its tunnel there.');load()}}catch(err){toast(err.message,'error');if(el.type==='checkbox')el.checked=!el.checked;if(el.dataset.projectAccount)el.value=el.dataset.current}});
-document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(openMenu){const owner=openMenu.previousElementSibling;closeMenus();owner?.focus?.();return}if(q('#wizard').classList.contains('open')&&!running)closeWizard();else if(q('#settings').classList.contains('open'))closeSettings()});
+document.addEventListener('keydown',e=>{if(e.key!=='Escape')return;if(openMenu){const owner=openMenu.previousElementSibling;closeMenus();owner?.focus?.();return}if(q('#edit').classList.contains('open')){closeEdit();return}if(q('#wizard').classList.contains('open')&&!running)closeWizard();else if(q('#settings').classList.contains('open'))closeSettings()});
 document.addEventListener('keydown',e=>{if(!openMenu||!['ArrowDown','ArrowUp'].includes(e.key))return;const items=qa('button',openMenu);const index=items.indexOf(document.activeElement);const nextIndex=(index+(e.key==='ArrowDown'?1:-1)+items.length)%items.length;items[nextIndex].focus();e.preventDefault()});
 
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&token&&!streamLive)load().then(schedulePoll)});

@@ -47,6 +47,11 @@ export class StateStore {
     if (!result.changes) throw new Error(`Project not found: ${id}`);
   }
 
+  renameProject(id: string, displayName: string): void {
+    const result = this.db.prepare('UPDATE projects SET display_name=?, updated_at=? WHERE id=?').run(displayName, new Date().toISOString(), id);
+    if (!result.changes) throw new Error(`Project not found: ${id}`);
+  }
+
   setProjectAutoStart(id: string, autoStart: boolean): void {
     const result = this.db.prepare('UPDATE projects SET auto_start=? WHERE id=?').run(autoStart ? 1 : 0, id);
     if (!result.changes) throw new Error(`Project not found: ${id}`);
