@@ -38,3 +38,36 @@ test('classifies a refused local origin', async () => {
   assert.equal(result.reachable, false);
   assert.equal(result.error.code, 'ORIGIN_CONNECTION_REFUSED');
 });
+
+test('starts with a warning when a slow origin still accepts connections', async () => {
+  const result = await checkOrigin('http://127.0.0.1:8000', {
+    timeoutMs: 1000,
+    fetchImpl: async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); },
+    connectImpl: async () => true,
+  });
+  assert.equal(result.reachable, true);
+  assert.equal(result.warning.code, 'ORIGIN_SLOW');
+});
+
+test('reports a timeout when nothing accepts connections', async () => {
+  const result = await checkOrigin('http://127.0.0.1:8000', {
+    timeoutMs: 1000,
+    fetchImpl: async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); },
+    connectImpl: async () => false,
+  });
+  assert.equal(result.reachable, false);
+  assert.equal(result.error.code, 'ORIGIN_TIMEOUT');
+});
+
+test('a real hanging origin is slow, not unreachable', async () => {
+  const net = await import('node:net');
+  const server = net.createServer(() => {}).listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  try {
+    const result = await checkOrigin(`http://127.0.0.1:${server.address().port}`, { timeoutMs: 300 });
+    assert.equal(result.reachable, true);
+    assert.equal(result.warning.code, 'ORIGIN_SLOW');
+  } finally {
+    server.close();
+  }
+});
