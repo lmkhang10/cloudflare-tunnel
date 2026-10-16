@@ -36,7 +36,7 @@ export class NamedTunnelWorkflow {
     this.baseArgs = options.baseArgs ?? []; this.runArgs = options.runArgs ?? (() => []); this.env = options.env;
     this.credentialsFileFor = options.credentialsFileFor ?? (() => undefined);
     this.dnsFor = options.dnsFor ?? (() => ({ deleteTunnelRecord: async (hostname: string) => ({ state: 'skipped', detail: `DNS cleanup is not available, so the record for ${hostname} was kept.` }) }));
-    this.originCheck = options.originCheck ?? (url => checkOrigin(url)); this.publicCheck = options.publicCheck ?? (url => checkOrigin(url, { timeoutMs: 10_000 }));
+    this.originCheck = options.originCheck ?? (url => checkOrigin(url)); this.publicCheck = options.publicCheck ?? (url => checkOrigin(url, { timeoutMs: 10_000, tcpFallback: false }));
   }
 
   async run(input: NamedInput): Promise<any> {

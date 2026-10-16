@@ -71,3 +71,16 @@ test('a real hanging origin is slow, not unreachable', async () => {
     server.close();
   }
 });
+
+test('a public hostname timeout stays a failure without the TCP probe', async () => {
+  let probed = false;
+  const result = await checkOrigin('https://dev.example.com', {
+    timeoutMs: 1000,
+    tcpFallback: false,
+    fetchImpl: async () => { throw new DOMException('The operation was aborted due to timeout', 'TimeoutError'); },
+    connectImpl: async () => { probed = true; return true; },
+  });
+  assert.equal(probed, false);
+  assert.equal(result.reachable, false);
+  assert.equal(result.error.code, 'ORIGIN_TIMEOUT');
+});

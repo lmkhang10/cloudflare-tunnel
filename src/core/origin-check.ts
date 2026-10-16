@@ -20,11 +20,13 @@ export function canConnect(url: string, timeoutMs: number): Promise<boolean> {
   });
 }
 
-export async function checkOrigin(localUrl: string, options: { timeoutMs?: number; maxRedirects?: number; fetchImpl?: typeof fetch; connectImpl?: (url: string, timeoutMs: number) => Promise<boolean> } = {}): Promise<OriginCheckResult> {
+export async function checkOrigin(localUrl: string, options: { timeoutMs?: number; maxRedirects?: number; fetchImpl?: typeof fetch; connectImpl?: (url: string, timeoutMs: number) => Promise<boolean>; tcpFallback?: boolean } = {}): Promise<OriginCheckResult> {
   const timeoutMs = options.timeoutMs ?? 3_000;
   const maxRedirects = options.maxRedirects ?? 5;
   const fetchImpl = options.fetchImpl ?? fetch;
   const connectImpl = options.connectImpl ?? canConnect;
+  // Off for the public hostname: the Cloudflare edge always accepts TCP, so the probe would hide a dead tunnel.
+  const tcpFallback = options.tcpFallback ?? true;
   let current = localUrl;
   try {
     for (let redirects = 0; redirects <= maxRedirects; redirects += 1) {
@@ -43,7 +45,7 @@ export async function checkOrigin(localUrl: string, options: { timeoutMs?: numbe
     const message = error instanceof Error ? `${error.name} ${error.message} ${String((error as any).cause?.code ?? '')}` : String(error);
     if (/TimeoutError|timed out|AbortError/i.test(message)) {
       // A slow first response (cold container, framework boot) should not block the tunnel when the port is open.
-      if (await connectImpl(current, timeoutMs)) return { reachable: true, warning: issue('ORIGIN_SLOW', `The local service accepted the connection but did not respond within ${Math.round(timeoutMs / 1000)}s.`, 'The tunnel starts anyway; check the application if requests stay slow.') };
+      if (tcpFallback && await connectImpl(current, timeoutMs)) return { reachable: true, warning: issue('ORIGIN_SLOW', `The local service accepted the connection but did not respond within ${Math.round(timeoutMs / 1000)}s.`, 'The tunnel starts anyway; check the application if requests stay slow.') };
       return { reachable: false, error: issue('ORIGIN_TIMEOUT', 'The local service did not respond before the timeout.', 'Verify the local URL and that the application is responsive.') };
     }
     if (/ECONNREFUSED|fetch failed/i.test(message)) return { reachable: false, error: issue('ORIGIN_CONNECTION_REFUSED', 'The local service refused the connection.', 'Start the local application and verify its host and port.') };
